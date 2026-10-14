@@ -1,0 +1,67 @@
+[package]
+name = "my-island"
+version = "0.1.0"
+description = "A Dynamic Island for Windows"
+edition = "2021"
+
+[lib]
+name = "my_island_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "protocol-asset", "image-png"] }
+tauri-plugin-store = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-clipboard-manager = "2"
+tauri-plugin-autostart = "2"
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-single-instance = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sysinfo = "0.35"
+arboard = "3"
+ureq = "2"
+regex = "1"
+base64 = "0.22"
+
+[target.'cfg(windows)'.dependencies]
+windows-core = "0.61"
+windows = { version = "0.61", features = [
+  "Foundation",
+  "Media_Control",
+  "Storage_Streams",
+  "Win32_Foundation",
+  "Win32_Graphics_Gdi",
+  "Win32_Media_Audio",
+  "Win32_Media_Audio_Endpoints",
+  "Win32_System_Com",
+  "Win32_System_Com_StructuredStorage",
+  "Win32_System_Variant",
+  "Win32_System_Power",
+  "Win32_System_DataExchange",
+  "Win32_System_Memory",
+  "Win32_System_SystemServices",
+  "Win32_System_Ole",
+  "Win32_UI_Input_KeyboardAndMouse",
+  "Win32_UI_Shell",
+  "Win32_UI_WindowsAndMessaging",
+] }
+
+# Full debug info for ~425 deps made every relink take minutes.
+[profile.dev]
+debug = "line-tables-only"
+incremental = true
+
+[profile.dev.package."*"]
+debug = false
+
+# Thin LTO + parallel codegen: near-identical speed/size, builds many times faster than fat LTO.
+[profile.release]
+codegen-units = 16
+lto = "thin"
+opt-level = "s"
+panic = "abort"
+strip = true

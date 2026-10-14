@@ -1,0 +1,3 @@
+# rust-lld links far faster than MSVC link.exe for big Tauri debug builds.
+[target.x86_64-pc-windows-msvc]
+linker = "rust-lld.exe"
