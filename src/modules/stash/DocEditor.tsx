@@ -13,7 +13,8 @@ import { NOTE_COLORS, collectionInWorkspace, useStash, type NoteItem } from "../
 import { toast } from "../../state/toast";
 import { useWorkspaces } from "../../state/workspaces";
 import { IconButton, Menu, Popover, bouncy, spring } from "../../ui/primitives";
-import { EmojiGrid, WorkspaceDot } from "../../ui/workspaces";
+import { WorkspaceDot } from "../../ui/workspaces";
+import { Glyph, IconPicker, InlineIcon } from "../../ui/icons";
 
 type Fmt = { icon: React.ReactNode; label: string; run: (ta: HTMLTextAreaElement) => void };
 
@@ -172,14 +173,14 @@ export function DocEditor({ id, onBack }: { id: string; onBack: () => void }) {
           width={260}
           estHeight={120}
           trigger={(t) => (
-            <motion.button whileHover={{ scale: 1.1, rotate: -8 }} whileTap={{ scale: 0.85 }} transition={bouncy} onClick={t} className="grid h-8 w-8 place-items-center rounded-xl text-[18px] hover:bg-white/8" title="Change icon">
-              {doc.note.emoji ?? "📝"}
+            <motion.button whileHover={{ scale: 1.08, rotate: -6 }} whileTap={{ scale: 0.88 }} transition={bouncy} onClick={t} className="rounded-xl" title="Change icon">
+              <Glyph name={doc.note.icon ?? "doc"} color={doc.note.color} size={30} />
             </motion.button>
           )}
         >
           {(close) => (
             <div className="p-1.5">
-              <EmojiGrid value={doc.note.emoji ?? ""} onPick={(e) => (patch({ emoji: e }), close())} />
+              <IconPicker value={doc.note.icon ?? "doc"} color={doc.note.color} onPick={(k) => (patch({ icon: k }), close())} />
             </div>
           )}
         </Popover>
@@ -250,15 +251,21 @@ export function DocEditor({ id, onBack }: { id: string; onBack: () => void }) {
               label: <span className="flex items-center gap-2"><span className="h-3 w-3 rounded-full" style={{ background: c }} />{doc.note.color === c ? "Current" : "Use this color"}</span>,
               onSelect: () => patch({ color: c }),
             })),
-            { header: "Workspace" },
+            { header: "Folder" },
             ...workspaces.map((w) => ({
-              label: `${w.emoji} ${w.name}${doc.workspaceId === w.id ? "  ✓" : ""}`,
+              label: w.name,
+              icon: <InlineIcon name={w.icon} color={w.color} />,
+              hint: doc.workspaceId === w.id ? <Check size={12} /> : undefined,
               onSelect: () => (moveToWorkspace(doc.id, w.id), toast(`Moved to ${w.name}`)),
             })),
-            { header: "Collection" },
+            { header: "Subfolder" },
             ...collections
               .filter((c) => collectionInWorkspace(c, doc.workspaceId ?? "all"))
-              .map((c) => ({ label: `${c.emoji} ${c.name}${doc.collectionId === c.id ? "  ✓" : ""}`, onSelect: () => moveTo(doc.id, doc.collectionId === c.id ? null : c.id) })),
+              .map((c) => ({
+                label: c.name,
+                icon: <InlineIcon name={c.icon} color={c.color} />,
+                hint: doc.collectionId === c.id ? <Check size={12} /> : undefined,
+                onSelect: () => moveTo(doc.id, doc.collectionId === c.id ? null : c.id) })),
             "sep",
             {
               label: "Delete doc",

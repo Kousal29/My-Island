@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "../lib/persist";
 import { uid } from "../lib/util";
+import { PICKER_ICONS, toIcon } from "../ui/icons";
 
 /**
  * A workspace is a project context ("Personal", "Thesis", "Client X docs").
@@ -10,7 +11,7 @@ import { uid } from "../lib/util";
 export interface Workspace {
   id: string;
   name: string;
-  emoji: string;
+  icon: string;
   color: string;
   description: string;
   createdAt: number;
@@ -21,12 +22,11 @@ export const ALL = "all";
 export const DEFAULT_WS = "personal";
 
 export const WS_COLORS = ["#8b7bff", "#4fb4ff", "#3fe0b0", "#ffd24a", "#ff9f6e", "#ff6f9c", "#b18cff", "#7dd3fc"];
-export const WS_EMOJI = ["🏠", "💼", "📚", "🚀", "🎨", "🧪", "💡", "🎓", "🛠️", "📈", "🎮", "✈️", "🧠", "📝", "🌱", "⭐"];
 
 interface WorkspaceState {
   workspaces: Workspace[];
   current: string;
-  create: (name: string, emoji?: string, color?: string, description?: string) => Workspace;
+  create: (name: string, icon?: string, color?: string, description?: string) => Workspace;
   update: (id: string, patch: Partial<Omit<Workspace, "id">>) => void;
   remove: (id: string) => void;
   reorder: (ids: string[]) => void;
@@ -37,16 +37,16 @@ const now = Date.now();
 
 export const useWorkspaces = create<WorkspaceState>((set, get) => ({
   workspaces: [
-    { id: DEFAULT_WS, name: "Personal", emoji: "🏠", color: "#3fe0b0", description: "Life admin, ideas and everything else", createdAt: now, lastOpenedAt: now },
-    { id: "work", name: "Work", emoji: "💼", color: "#4fb4ff", description: "Projects, docs and meetings", createdAt: now, lastOpenedAt: now },
+    { id: DEFAULT_WS, name: "Personal", icon: "home", color: "#3fe0b0", description: "Life admin, ideas and everything else", createdAt: now, lastOpenedAt: now },
+    { id: "work", name: "Work", icon: "briefcase", color: "#4fb4ff", description: "Projects, docs and meetings", createdAt: now, lastOpenedAt: now },
   ],
   current: ALL,
-  create: (name, emoji, color, description = "") => {
+  create: (name, icon, color, description = "") => {
     const ws = get().workspaces;
     const w: Workspace = {
       id: uid(),
       name: name.trim() || "Untitled",
-      emoji: emoji ?? WS_EMOJI[ws.length % WS_EMOJI.length],
+      icon: icon ?? PICKER_ICONS[(ws.length + 3) % PICKER_ICONS.length],
       color: color ?? WS_COLORS[ws.length % WS_COLORS.length],
       description,
       createdAt: Date.now(),
@@ -86,7 +86,10 @@ export const useCurrentWorkspace = () =>
 export const hydrateWorkspaces = () =>
   persist(useWorkspaces, {
     key: "workspaces",
-    version: 1,
+    version: 2,
+    migrations: {
+      1: (d) => ({ ...d, workspaces: (d.workspaces ?? []).map(({ emoji, ...w }: any) => ({ ...w, icon: toIcon(emoji, "folder") })) }),
+    },
     pick: (s) => ({ workspaces: s.workspaces, current: s.current }),
     apply: (d) => d,
   });

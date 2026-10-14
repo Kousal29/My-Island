@@ -1,7 +1,7 @@
 export interface DocTemplate {
   id: string;
   label: string;
-  emoji: string;
+  icon: string;
   title: string;
   body: () => string;
 }
@@ -9,11 +9,11 @@ export interface DocTemplate {
 const today = () => new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
 
 export const DOC_TEMPLATES: DocTemplate[] = [
-  { id: "blank", label: "Blank doc", emoji: "📝", title: "", body: () => "" },
+  { id: "blank", label: "Blank doc", icon: "pen", title: "", body: () => "" },
   {
     id: "brief",
     label: "Project brief",
-    emoji: "🚀",
+    icon: "rocket",
     title: "Project brief",
     body: () => `## Goal
 What are we building and why?
@@ -35,7 +35,7 @@ What are we building and why?
   {
     id: "readme",
     label: "README / docs",
-    emoji: "📘",
+    icon: "book",
     title: "README",
     body: () => `# Overview
 One paragraph on what this is.
@@ -56,7 +56,7 @@ npm run dev
   {
     id: "meeting",
     label: "Meeting notes",
-    emoji: "🗓️",
+    icon: "calendar",
     title: `Meeting — ${new Date().toLocaleDateString(undefined, { month: "short", day: "numeric" })}`,
     body: () => `**Date:** ${today()}
 **Attendees:**
@@ -74,7 +74,7 @@ npm run dev
   {
     id: "daily",
     label: "Daily log",
-    emoji: "☀️",
+    icon: "sun",
     title: `Log — ${new Date().toLocaleDateString(undefined, { month: "short", day: "numeric" })}`,
     body: () => `## Today
 - [ ]
@@ -89,7 +89,7 @@ npm run dev
   {
     id: "research",
     label: "Research notes",
-    emoji: "🔬",
+    icon: "flask",
     title: "Research",
     body: () => `## Question
 What are we trying to learn?

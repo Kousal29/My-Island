@@ -43,6 +43,25 @@ export interface MonitorInfo { index: number; name: string; width: number; heigh
 export interface LinkMeta { url: string; title?: string; description?: string; image?: string; favicon?: string; siteName?: string }
 export interface FileMeta { path: string; name: string; ext: string; isDir: boolean; size: number; exists: boolean; modified?: number }
 export interface ClipEvent { text: string | null; files: string[] }
+export interface ToastEvent { id: number; app: string; appId: string; title: string; body: string; icon: string | null; kind: "call" | "message"; at: number }
+export interface CallState { active: boolean; app: string; meeting: boolean; mic: boolean; camera: boolean; since: number }
+export interface AgentEvent {
+  source: string;
+  title: string;
+  body: string;
+  project: string;
+  kind: "start" | "tool" | "attention" | "done" | "subdone" | "end" | "info";
+  at: number;
+  session: string;
+  tool: string;
+  detail: string;
+  file: string;
+  /** Source terminal/IDE window (HWND), 0 when unknown. */
+  window: number;
+  host: string;
+}
+export type NotifyAccess = "pending" | "allowed" | "denied" | "unavailable";
+export interface BetaInfo { beta: boolean; expires: string | null; daysLeft: number | null; feedbackUrl: string | null }
 export type DragKind = "files" | "link" | "text" | "unknown";
 export interface DragPayload { phase: "enter" | "over" | "leave" | "drop"; kind: DragKind; count: number; files: string[]; url: string | null; text: string | null }
 
@@ -55,6 +74,10 @@ interface Events {
   "stats://update": Stats;
   "clipboard://changed": ClipEvent;
   "island://drag": DragPayload;
+  "notify://toast": ToastEvent;
+  "notify://status": NotifyAccess;
+  "call://state": CallState;
+  "agent://notify": AgentEvent;
 }
 
 export function on<K extends keyof Events>(event: K, cb: (payload: Events[K]) => void): () => void {
@@ -94,4 +117,13 @@ export const api = {
   revealPath: (path: string) => call<void>("reveal_path", { path }),
   openUrl: (url: string) => call<void>("open_url", { url }),
   initDropTarget: () => call<void>("init_drop_target"),
+  setCapturePrivacy: (pet: boolean, island: boolean) => call<void>("set_capture_privacy", { pet, island }),
+  idleSeconds: () => call<number>("idle_seconds", undefined, 0),
+  notifyStatus: () => call<NotifyAccess>("notify_status", undefined, "unavailable"),
+  setNotifyEnabled: (value: boolean) => call<void>("set_notify_enabled", { value }),
+  claudeCodeConnected: () => call<boolean>("claude_code_connected", undefined, false),
+  connectClaudeCode: () => call<string>("connect_claude_code"),
+  focusSourceWindow: (hwnd: number) => call<boolean>("focus_source_window", { hwnd }, false),
+  setBuddyLook: (value: boolean) => call<void>("set_buddy_look", { value }),
+  betaInfo: () => call<BetaInfo>("beta_info", undefined, { beta: false, expires: null, daysLeft: null, feedbackUrl: null }),
 };

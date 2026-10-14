@@ -63,6 +63,7 @@ function headMotion(pose: Pose): { animate: TargetAndTransition; transition: Tra
 function bodyMotion(pose: Pose): { animate: TargetAndTransition; transition: Transition } {
   switch (pose) {
     case "happy": return { animate: { y: [0, -9, 0], scaleY: [1, 1.04, 0.96, 1] }, transition: loop(0.55) };
+    case "proud": return { animate: { y: [0, -11, 0, -4, 0], scaleY: [1, 1.06, 0.94, 1.02, 1] }, transition: loop(0.9) };
     case "excited": return { animate: { y: [0, -14, 0], scaleY: [1, 1.06, 0.94, 1] }, transition: loop(0.5) };
     case "dance": return { animate: { x: [-3, 3, -3], rotate: [-4, 4, -4] }, transition: loop(0.9) };
     case "sleep": return { animate: { scaleY: [1, 1.035, 1], scaleX: [1, 1.015, 1] }, transition: loop(3.6) };
@@ -81,6 +82,24 @@ function Eyes({ pose, palette, look, blink, still }: { pose: Pose; palette: Pale
         <path d={`M${lx - 4.5} ${ey} Q${lx} ${ey + 4} ${lx + 4.5} ${ey}`} />
         <path d={`M${rx - 4.5} ${ey} Q${rx} ${ey + 4} ${rx + 4.5} ${ey}`} />
       </g>
+    );
+  }
+  if (pose === "proud") {
+    const star = (cx: number) => `M${cx} ${ey - 6.2} Q${cx + 1.1} ${ey - 1.1} ${cx + 6.2} ${ey} Q${cx + 1.1} ${ey + 1.1} ${cx} ${ey + 6.2} Q${cx - 1.1} ${ey + 1.1} ${cx - 6.2} ${ey} Q${cx - 1.1} ${ey - 1.1} ${cx} ${ey - 6.2} Z`;
+    return (
+      <motion.g
+        initial={{ scale: 0.4, rotate: -30 }}
+        animate={still ? { scale: 1, rotate: 0 } : { scale: [1, 1.18, 1], rotate: [0, 12, 0] }}
+        transition={still ? { type: "spring", stiffness: 500, damping: 12 } : loop(0.8)}
+        style={{ originX: "50%", originY: "50%" }}
+      >
+        {[lx, rx].map((cx) => (
+          <g key={cx}>
+            <path d={star(cx)} fill="#ffd24a" stroke="#e8a317" strokeWidth={0.8} strokeLinejoin="round" />
+            <circle cx={cx - 1.4} cy={ey - 1.6} r={1.1} fill="#fff" opacity={0.9} />
+          </g>
+        ))}
+      </motion.g>
     );
   }
   if (pose === "happy" || pose === "excited" || pose === "dance") {
@@ -134,7 +153,15 @@ function Mouth({ kind, pose, still }: { kind: PetKind; pose: Pose; still?: boole
       </motion.g>
     );
   }
-  const tongue = kind === "dog" && (pose === "happy" || pose === "dance" || pose === "love" || pose === "walk");
+  if (pose === "happy" || pose === "proud") {
+    return (
+      <motion.g initial={{ scaleY: 0.3 }} animate={{ scaleY: 1 }} transition={{ type: "spring", stiffness: 500, damping: 14 }} style={{ originX: "50%", originY: "0%" }}>
+        <path d="M54.2 50.4 Q60 59.5 65.8 50.4 Q60 52.2 54.2 50.4 Z" fill="#7a2638" />
+        <path d="M57 55.2 Q60 57.8 63 55.2 Q60 54.2 57 55.2 Z" fill="#ff7d96" />
+      </motion.g>
+    );
+  }
+  const tongue = kind === "dog" && (pose === "dance" || pose === "love" || pose === "walk");
   return (
     <g>
       {tongue && (
@@ -263,7 +290,7 @@ export function PetSvg({ kind, pose, palette, accessory, look = { x: 0, y: 0 }, 
       {/* muzzle */}
       <ellipse cx={60} cy={kind === "dog" ? 51 : 50.5} rx={kind === "dog" ? 13 : 10.5} ry={kind === "dog" ? 9 : 7.2} fill={palette.belly} />
       {/* blush */}
-      <motion.g animate={{ opacity: pose === "love" || pose === "happy" ? 0.85 : 0.5 }}>
+      <motion.g animate={{ opacity: pose === "love" || pose === "happy" || pose === "proud" ? 0.95 : 0.5 }}>
         <ellipse cx={41} cy={50} rx={4.6} ry={2.7} fill={BLUSH} />
         <ellipse cx={79} cy={50} rx={4.6} ry={2.7} fill={BLUSH} />
       </motion.g>

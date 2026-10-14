@@ -28,6 +28,8 @@ pub fn spawn(app: AppHandle) {
     std::thread::spawn(move || {
         let mut interactive: HashMap<String, bool> = HashMap::new();
         let mut hovering: HashMap<String, bool> = HashMap::new();
+        let mut last_look: (f64, f64) = (f64::MAX, f64::MAX);
+        let mut last_look_at = std::time::Instant::now();
         loop {
             let state = app.state::<AppState>();
             let targets = state.targets.lock().unwrap().clone();
@@ -49,12 +51,35 @@ pub fn spawn(app: AppHandle) {
                 }
                 if hovering.get(&label).copied().unwrap_or(false) != inside {
                     hovering.insert(label.clone(), inside);
-                    let _ = app.emit_to(label.as_str(), "island://hover", inside);
+                    let event = if label == "main" { "island://hover" } else { "buddy://hover" };
+                    let _ = app.emit_to(label.as_str(), event, inside);
+                }
+            }
+            // Desktop pet: stream the cursor (window-relative, logical px) so its eyes can follow.
+            if state.buddy_look.load(Ordering::Relaxed) && state.buddy_active.load(Ordering::Relaxed) {
+                if let (Some(t), Some((cx, cy))) = (targets_snapshot_buddy(&state), cursor) {
+                    let s = t.geo.scale.max(0.1);
+                    let p = ((cx - t.geo.x) as f64 / s, (cy - t.geo.y) as f64 / s);
+                    let moved = (p.0 - last_look.0).abs() + (p.1 - last_look.1).abs() > 4.0;
+                    if moved && last_look_at.elapsed() >= Duration::from_millis(60) {
+                        last_look = p;
+                        last_look_at = std::time::Instant::now();
+                        let _ = app.emit_to("buddy", "buddy://cursor", p);
+                    }
                 }
             }
             std::thread::sleep(Duration::from_millis(if any_hover { 16 } else { 40 }));
         }
     });
+}
+
+fn targets_snapshot_buddy(state: &AppState) -> Option<crate::state::HitTarget> {
+    state.targets.lock().unwrap().get("buddy").copied()
+}
+
+#[tauri::command]
+pub fn set_buddy_look(app: AppHandle, value: bool) {
+    app.state::<AppState>().buddy_look.store(value, Ordering::Relaxed);
 }
 
 fn contains(r: HitRect, wx: i32, wy: i32, scale: f64, cx: i32, cy: i32, top_edge: bool) -> bool {

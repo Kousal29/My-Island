@@ -6,6 +6,7 @@ import { api, type FileMeta, type LinkMeta } from "../lib/bridge";
 import { bus } from "../lib/bus";
 import { useSettings } from "./settings";
 import { DEFAULT_WS, inWorkspace, targetWorkspace } from "./workspaces";
+import { toIcon } from "../ui/icons";
 
 export type StashKind = "file" | "link" | "clip" | "note";
 
@@ -29,10 +30,10 @@ export interface LinkItem extends Base {
   link: { url: string; meta?: LinkMeta; status: "idle" | "loading" | "ok" | "error" };
 }
 export interface ClipItem extends Base { kind: "clip"; clip: { text: string; type: ClipType; hash: string } }
-export interface NoteItem extends Base { kind: "note"; note: { title: string; text: string; color: string; emoji?: string } }
+export interface NoteItem extends Base { kind: "note"; note: { title: string; text: string; color: string; icon?: string } }
 export type StashItem = FileItem | LinkItem | ClipItem | NoteItem;
 
-export interface Collection { id: string; name: string; emoji: string; color: string; workspaceId: string | null }
+export interface Collection { id: string; name: string; icon: string; color: string; workspaceId: string | null }
 
 export type StashFilter = "all" | "pinned" | StashKind;
 
@@ -56,7 +57,7 @@ interface StashState {
   refreshLink: (id: string) => Promise<void>;
   refreshFiles: () => Promise<void>;
   clearClips: (keepPinned?: boolean) => void;
-  addCollection: (name: string, emoji?: string) => string;
+  addCollection: (name: string, icon?: string) => string;
   updateCollection: (id: string, patch: Partial<Collection>) => void;
   removeCollection: (id: string) => void;
   setFilter: (f: StashFilter) => void;
@@ -80,9 +81,9 @@ const base = (kind: StashKind, collectionId: string | null = null): Base => ({
 export const useStash = create<StashState>((set, get) => ({
   items: [],
   collections: [
-    { id: "docs", name: "Docs", emoji: "📄", color: "#4fb4ff", workspaceId: "work" },
-    { id: "ideas", name: "Ideas", emoji: "💡", color: "#ffd24a", workspaceId: DEFAULT_WS },
-    { id: "reading", name: "Reading list", emoji: "📚", color: "#ff6f9c", workspaceId: null },
+    { id: "docs", name: "Docs", icon: "doc", color: "#4fb4ff", workspaceId: "work" },
+    { id: "ideas", name: "Ideas", icon: "idea", color: "#ffd24a", workspaceId: DEFAULT_WS },
+    { id: "reading", name: "Reading list", icon: "book", color: "#ff6f9c", workspaceId: null },
   ],
   filter: "all",
   collection: null,
@@ -223,10 +224,10 @@ export const useStash = create<StashState>((set, get) => ({
   clearClips: (keepPinned = true) =>
     set({ items: get().items.filter((i) => i.kind !== "clip" || (keepPinned && (i.pinned || i.collectionId || i.workspaceId))) }),
 
-  addCollection: (name, emoji = "📁") => {
+  addCollection: (name, icon = "folder") => {
     const id = uid();
     const colors = NOTE_COLORS;
-    set({ collections: [...get().collections, { id, name, emoji, color: colors[get().collections.length % colors.length], workspaceId: targetWorkspace() }] });
+    set({ collections: [...get().collections, { id, name, icon, color: colors[get().collections.length % colors.length], workspaceId: targetWorkspace() }] });
     return id;
   },
   updateCollection: (id, patch) => set({ collections: get().collections.map((c) => (c.id === id ? { ...c, ...patch } : c)) }),
@@ -271,12 +272,19 @@ export const collectionInWorkspace = (c: Collection, ws: string) => inWorkspace(
 export const hydrateStash = () =>
   persist(useStash, {
     key: "stash",
-    version: 2,
+    version: 3,
     migrations: {
       1: (d) => ({
         ...d,
         items: (d.items ?? []).map((i: StashItem) => ({ ...i, workspaceId: i.kind === "clip" && !i.pinned && !i.collectionId ? null : DEFAULT_WS })),
         collections: (d.collections ?? []).map((c: Collection) => ({ ...c, workspaceId: DEFAULT_WS })),
+      }),
+      2: (d) => ({
+        ...d,
+        collections: (d.collections ?? []).map(({ emoji, ...c }: any) => ({ ...c, icon: toIcon(emoji, "folder") })),
+        items: (d.items ?? []).map((i: any) =>
+          i.kind === "note" ? { ...i, note: { ...i.note, emoji: undefined, icon: toIcon(i.note?.emoji, "doc") } } : i,
+        ),
       }),
     },
     pick: (s) => ({ items: s.items, collections: s.collections, filter: s.filter, collection: s.collection }),

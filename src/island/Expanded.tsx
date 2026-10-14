@@ -7,11 +7,11 @@ import { SettingsView } from "../modules/settings";
 import { useIsland } from "../state/island";
 import { useSettings } from "../state/settings";
 import { useToasts } from "../state/toast";
-import { IconButton, spring } from "../ui/primitives";
+import { HScroll, IconButton, spring } from "../ui/primitives";
 import { WorkspaceSwitcher } from "../ui/workspaces";
 
-export const HEADER_H = 46;
-export const PAD = 14;
+export const HEADER_H = 50;
+export const PAD = 20;
 
 export function useEnabledModules() {
   const { moduleOrder, disabledModules } = useSettings();
@@ -22,10 +22,10 @@ function TabBar() {
   const { active, settingsOpen, setActive, set } = useIsland();
   const ids = useEnabledModules();
   return (
-    <div className="flex items-center gap-1 px-3" style={{ height: HEADER_H }}>
+    <div className="flex items-center gap-1 px-4 pt-1" style={{ height: HEADER_H }}>
       <WorkspaceSwitcher />
-      <div className="mx-1 h-4 w-px bg-white/10" />
-      <div className="flex min-w-0 flex-1 items-center gap-0.5">
+      <div className="mx-1 h-4 w-px shrink-0 bg-white/10" />
+      <HScroll className="flex-1" watch={active}>
         {ids.map((id, i) => {
           const m = MODULES[id];
           const on = !settingsOpen && active === id;
@@ -33,10 +33,11 @@ function TabBar() {
           return (
             <motion.button
               key={id}
+              data-active={on ? "true" : undefined}
               onClick={() => setActive(id)}
               whileTap={{ scale: 0.9 }}
               title={`${m.title} (${i + 1})`}
-              className={cx("focus-ring relative flex h-8 items-center gap-1.5 rounded-full px-2.5 text-[12px] font-medium outline-none transition-colors", on ? "text-ink" : "text-ink-3 hover:text-ink-2")}
+              className={cx("focus-ring relative flex h-8 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[12px] font-medium outline-none transition-colors", on ? "text-ink" : "text-ink-3 hover:text-ink-2")}
             >
               {on && <motion.span layoutId="tab-pill" transition={spring} className="absolute inset-0 rounded-full bg-white/11 ring-1 ring-white/8" />}
               <motion.span className="relative" animate={on ? { rotate: [0, -12, 10, 0], scale: [1, 1.15, 1] } : {}} transition={{ duration: 0.45 }}>
@@ -58,7 +59,7 @@ function TabBar() {
             </motion.button>
           );
         })}
-      </div>
+      </HScroll>
       <IconButton label="Settings (Ctrl+,)" size="sm" active={settingsOpen} onClick={() => set({ settingsOpen: !settingsOpen })}>
         <motion.span animate={{ rotate: settingsOpen ? 90 : 0 }} transition={spring}>
           <Settings size={15} />
@@ -128,14 +129,14 @@ export function ExpandedContent({ width, height }: { width: number; height: numb
             key={key}
             custom={dir}
             variants={{
-              enter: (d: number) => ({ opacity: 0, x: 24 * d, filter: "blur(6px)" }),
-              center: { opacity: 1, x: 0, filter: "blur(0px)" },
-              exit: (d: number) => ({ opacity: 0, x: -24 * d, filter: "blur(6px)" }),
+              enter: (d: number) => ({ opacity: 0, x: 18 * d }),
+              center: { opacity: 1, x: 0 },
+              exit: (d: number) => ({ opacity: 0, x: -18 * d }),
             }}
             initial="enter"
             animate="center"
             exit="exit"
-            transition={{ type: "spring", stiffness: 420, damping: 36 }}
+            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
             className="absolute inset-0"
             style={{ padding: `0 ${PAD}px ${PAD}px` }}
           >

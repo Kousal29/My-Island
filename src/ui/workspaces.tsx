@@ -1,34 +1,14 @@
 import { AnimatePresence, motion } from "motion/react";
-import { Check, ChevronDown, Layers, Plus, Settings2 } from "lucide-react";
+import { Check, ChevronDown, Folders, Plus, Settings2 } from "lucide-react";
 import { useState } from "react";
 import { play } from "../lib/sound";
 import { cx } from "../lib/util";
 import { useIsland } from "../state/island";
 import { useStash } from "../state/stash";
 import { useTodos } from "../state/todos";
-import { ALL, WS_COLORS, WS_EMOJI, useWorkspaces, type Workspace } from "../state/workspaces";
+import { ALL, WS_COLORS, useWorkspaces, type Workspace } from "../state/workspaces";
+import { Glyph, IconPicker, PICKER_ICONS } from "./icons";
 import { Popover, bouncy, spring } from "./primitives";
-
-export function EmojiGrid({ value, onPick, color }: { value: string; onPick: (e: string) => void; color?: string }) {
-  return (
-    <div className="grid grid-cols-8 gap-1">
-      {WS_EMOJI.map((e) => (
-        <motion.button
-          key={e}
-          type="button"
-          whileHover={{ scale: 1.2, rotate: -6 }}
-          whileTap={{ scale: 0.85 }}
-          transition={bouncy}
-          onClick={() => onPick(e)}
-          className={cx("grid h-7 w-7 place-items-center rounded-lg text-[15px] transition-colors", value === e ? "bg-white/14" : "hover:bg-white/8")}
-          style={value === e && color ? { boxShadow: `inset 0 0 0 1.5px ${color}` } : undefined}
-        >
-          {e}
-        </motion.button>
-      ))}
-    </div>
-  );
-}
 
 export function ColorDots({ value, onPick }: { value: string; onPick: (c: string) => void }) {
   return (
@@ -67,27 +47,20 @@ export function WorkspaceForm({
 }: {
   initial?: Partial<Workspace>;
   submitLabel: string;
-  onSubmit: (w: { name: string; emoji: string; color: string; description: string }) => void;
+  onSubmit: (w: { name: string; icon: string; color: string; description: string }) => void;
   onCancel?: () => void;
 }) {
   const count = useWorkspaces((s) => s.workspaces.length);
   const [name, setName] = useState(initial?.name ?? "");
-  const [emoji, setEmoji] = useState(initial?.emoji ?? WS_EMOJI[(count + 2) % WS_EMOJI.length]);
+  const [icon, setIcon] = useState<string>(initial?.icon ?? PICKER_ICONS[(count + 3) % PICKER_ICONS.length]);
   const [color, setColor] = useState(initial?.color ?? WS_COLORS[count % WS_COLORS.length]);
   const [description, setDescription] = useState(initial?.description ?? "");
-  const submit = () => name.trim() && onSubmit({ name: name.trim(), emoji, color, description: description.trim() });
+  const submit = () => name.trim() && onSubmit({ name: name.trim(), icon, color, description: description.trim() });
   return (
     <div className="space-y-2.5 p-1.5">
       <div className="flex items-center gap-2">
-        <motion.div
-          key={emoji}
-          initial={{ scale: 0.4, rotate: -30 }}
-          animate={{ scale: 1, rotate: 0 }}
-          transition={bouncy}
-          className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl text-[20px]"
-          style={{ background: `color-mix(in oklab, ${color} 22%, transparent)`, boxShadow: `inset 0 0 0 1px color-mix(in oklab, ${color} 45%, transparent)` }}
-        >
-          {emoji}
+        <motion.div key={icon + color} initial={{ scale: 0.6, rotate: -18 }} animate={{ scale: 1, rotate: 0 }} transition={bouncy}>
+          <Glyph name={icon} color={color} size={40} />
         </motion.div>
         <div className="min-w-0 flex-1 space-y-1">
           <input
@@ -99,7 +72,7 @@ export function WorkspaceForm({
               if (e.key === "Escape" && onCancel) (e.stopPropagation(), onCancel());
             }}
             maxLength={32}
-            placeholder="Workspace name, e.g. “Thesis”"
+            placeholder="Folder name, e.g. “Thesis”"
             className="h-7 w-full rounded-lg bg-white/7 px-2 text-[13px] font-semibold outline-none placeholder:font-normal placeholder:text-ink-4 focus:bg-white/10"
           />
           <input
@@ -112,25 +85,26 @@ export function WorkspaceForm({
           />
         </div>
       </div>
-      <EmojiGrid value={emoji} onPick={setEmoji} color={color} />
-      <div className="flex items-center justify-between gap-2">
-        <ColorDots value={color} onPick={setColor} />
-        <div className="flex gap-1">
-          {onCancel && (
-            <button onClick={onCancel} className="h-7 rounded-full px-2.5 text-[12px] text-ink-3 hover:bg-white/6 hover:text-ink-2">
-              Cancel
-            </button>
+      <IconPicker value={icon} onPick={setIcon} color={color} />
+      <ColorDots value={color} onPick={setColor} />
+      <div className="flex items-center justify-end gap-1.5 pt-0.5">
+        {onCancel && (
+          <button onClick={onCancel} className="h-7 rounded-full px-3 text-[12px] text-ink-3 hover:bg-white/6 hover:text-ink-2">
+            Cancel
+          </button>
+        )}
+        <motion.button
+          whileTap={name.trim() ? { scale: 0.94 } : undefined}
+          disabled={!name.trim()}
+          onClick={submit}
+          className={cx(
+            "h-7 rounded-full px-3.5 text-[12px] font-semibold transition-colors",
+            name.trim() ? "text-black" : "cursor-not-allowed bg-white/8 text-ink-4",
           )}
-          <motion.button
-            whileTap={{ scale: 0.94 }}
-            disabled={!name.trim()}
-            onClick={submit}
-            className="h-7 rounded-full px-3 text-[12px] font-semibold text-black disabled:opacity-35"
-            style={{ background: color }}
-          >
-            {submitLabel}
-          </motion.button>
-        </div>
+          style={name.trim() ? { background: color } : undefined}
+        >
+          {submitLabel}
+        </motion.button>
       </div>
     </div>
   );
@@ -152,17 +126,10 @@ function useCounts() {
 }
 
 export function WorkspaceDot({ ws, size = 18 }: { ws: Workspace | null; size?: number }) {
+  if (ws) return <Glyph name={ws.icon} color={ws.color} size={size} />;
   return (
-    <span
-      className="grid shrink-0 place-items-center rounded-[7px]"
-      style={{
-        width: size,
-        height: size,
-        fontSize: size * 0.62,
-        background: ws ? `color-mix(in oklab, ${ws.color} 24%, transparent)` : "rgb(255 255 255 / 0.08)",
-      }}
-    >
-      {ws ? ws.emoji : <Layers size={size * 0.6} className="text-ink-2" />}
+    <span className="grid shrink-0 place-items-center bg-white/8 text-ink-2" style={{ width: size, height: size, borderRadius: Math.round(size * 0.32) }}>
+      <Folders size={Math.round(size * 0.56)} strokeWidth={2.1} />
     </span>
   );
 }
@@ -191,7 +158,7 @@ export function WorkspaceSwitcher() {
             toggle();
           }}
           whileTap={{ scale: 0.94 }}
-          title="Switch workspace (Alt+1…9, Alt+0 for all)"
+          title="Switch folder (Alt+1…9, Alt+0 for all)"
           className={cx(
             "focus-ring flex h-8 max-w-[150px] items-center gap-1.5 rounded-full pr-2 pl-1 text-[12px] font-semibold outline-none transition-colors",
             open ? "bg-white/12" : "bg-white/6 hover:bg-white/10",
@@ -203,7 +170,7 @@ export function WorkspaceSwitcher() {
               <WorkspaceDot ws={cur} size={22} />
             </motion.span>
           </AnimatePresence>
-          <span className="truncate">{cur?.name ?? "All spaces"}</span>
+          <span className="truncate">{cur?.name ?? "All folders"}</span>
           <motion.span animate={{ rotate: open ? 180 : 0 }} transition={spring}>
             <ChevronDown size={12} className="text-ink-3" />
           </motion.span>
@@ -216,7 +183,7 @@ export function WorkspaceSwitcher() {
             submitLabel="Create"
             onCancel={() => setCreating(false)}
             onSubmit={(w) => {
-              create(w.name, w.emoji, w.color, w.description);
+              create(w.name, w.icon, w.color, w.description);
               play("success");
               setCreating(false);
               close();
@@ -224,7 +191,7 @@ export function WorkspaceSwitcher() {
           />
         ) : (
           <div className="max-h-[340px] overflow-y-auto">
-            <div className="px-2.5 pt-1.5 pb-1 text-[10px] font-semibold tracking-[0.08em] text-ink-4 uppercase">Workspaces</div>
+            <div className="px-2.5 pt-1.5 pb-1 text-[10px] font-semibold tracking-[0.08em] text-ink-4 uppercase">Folders</div>
             {[null, ...workspaces].map((w, i) => {
               const id = w?.id ?? ALL;
               const c = w ? counts.get(w.id) : undefined;
@@ -241,7 +208,7 @@ export function WorkspaceSwitcher() {
                 >
                   <WorkspaceDot ws={w} size={26} />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[12.5px] font-medium text-ink">{w?.name ?? "All workspaces"}</span>
+                    <span className="block truncate text-[12.5px] font-medium text-ink">{w?.name ?? "All folders"}</span>
                     <span className="block truncate text-[10.5px] text-ink-3">
                       {w ? (w.description || `${c?.items ?? 0} saved · ${c?.todos ?? 0} open tasks`) : "See everything together"}
                     </span>
@@ -257,7 +224,7 @@ export function WorkspaceSwitcher() {
             })}
             <div className="my-1 h-px bg-white/8" />
             <button onClick={() => setCreating(true)} className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-1.5 text-[12.5px] text-ink-2 hover:bg-white/8 hover:text-ink">
-              <Plus size={14} /> New workspace
+              <Plus size={14} /> New folder
             </button>
             <button
               onClick={() => {
@@ -266,7 +233,7 @@ export function WorkspaceSwitcher() {
               }}
               className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-1.5 text-[12.5px] text-ink-2 hover:bg-white/8 hover:text-ink"
             >
-              <Settings2 size={14} /> Manage workspaces
+              <Settings2 size={14} /> Manage folders
             </button>
           </div>
         )

@@ -6,7 +6,7 @@ import { clamp } from "../lib/util";
 import { useLive } from "./live";
 import type { PetKind } from "./settings";
 
-export type Pose = "idle" | "happy" | "love" | "eat" | "sleep" | "dance" | "curious" | "yawn" | "walk" | "excited" | "sad" | "held";
+export type Pose = "idle" | "happy" | "love" | "eat" | "sleep" | "dance" | "curious" | "yawn" | "walk" | "excited" | "sad" | "held" | "proud";
 export type Accessory = "none" | "bow" | "scarf" | "glasses" | "party" | "crown";
 export type Food = "fish" | "bone" | "cookie" | "milk";
 
@@ -175,11 +175,11 @@ export function playWith() {
 }
 
 export function mood(s: Pick<PetState, "fullness" | "happiness" | "energy">) {
-  if (s.energy < 20) return { label: "Sleepy", emoji: "😴" };
-  if (s.fullness < 25) return { label: "Hungry", emoji: "🍽️" };
-  if (s.happiness < 30) return { label: "Lonely", emoji: "🥺" };
-  if (s.happiness > 80 && s.fullness > 60) return { label: "Ecstatic", emoji: "🤩" };
-  return { label: "Content", emoji: "😊" };
+  if (s.energy < 20) return { label: "Sleepy", color: "#b9c4ff" };
+  if (s.fullness < 25) return { label: "Hungry", color: "#ff9f6e" };
+  if (s.happiness < 30) return { label: "Lonely", color: "#ff6f9c" };
+  if (s.happiness > 80 && s.fullness > 60) return { label: "Ecstatic", color: "#ffd24a" };
+  return { label: "Content", color: "#3fe0b0" };
 }
 
 /** Applies stat decay for elapsed time (including while the app was closed). */
@@ -211,7 +211,7 @@ export function startPetBrain() {
   const offs = [
     bus.on("todo:completed", () => {
       lastInteraction = Date.now();
-      react("happy", 2200, pick(["Nice!", "Yay!", "Done ✓", "Proud of you!"]));
+      react("proud", 2400, pick(["Nice!", "Yay!", "Done!", "Proud of you!"]));
       burst("star", 3);
       gainXp(8);
     }),

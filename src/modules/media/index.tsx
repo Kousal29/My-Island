@@ -142,7 +142,7 @@ function MediaView() {
   const m = useLive((s) => s.media);
   if (!m) {
     return (
-      <Empty icon="🎧" title="Nothing playing" hint="Play something in Spotify, your browser, or any app that shows in the Windows media flyout.">
+      <Empty icon={<Music2 size={20} />} title="Nothing playing" hint="Play something in Spotify, your browser, or any app that shows in the Windows media flyout.">
         <VolumeRowWrap />
       </Empty>
     );
@@ -150,8 +150,8 @@ function MediaView() {
   return (
     <div className="relative flex h-full gap-5 px-1 pt-1">
       <div
-        className="pointer-events-none absolute -top-10 -left-10 h-56 w-56 rounded-full blur-3xl transition-opacity duration-700"
-        style={{ background: "var(--accent)", opacity: m.playing ? 0.32 : 0.12 }}
+        className="pointer-events-none absolute -top-16 -left-16 h-72 w-72 rounded-full transition-opacity duration-700"
+        style={{ background: "radial-gradient(closest-side, color-mix(in oklab, var(--accent) 45%, transparent), transparent)", opacity: m.playing ? 0.75 : 0.3 }}
       />
       <div className="relative">
         <Artwork src={m.artwork} size={148} radius={22} playing={m.playing} />
@@ -206,7 +206,7 @@ export const mediaModule: IslandModule = {
   id: "media",
   title: "Now Playing",
   icon: Music2,
-  size: { w: 580, h: 236 },
+  size: { w: 600, h: 246 },
   View: MediaView,
   useActivity: useMediaActivity,
   description: "Track info, artwork, seek & transport for any app in the Windows media flyout.",

@@ -12,6 +12,8 @@ export interface Activity {
   width?: number;
   /** Module to open when the collapsed island is clicked. */
   opens?: string;
+  /** Custom click action instead of opening a module (e.g. jump to an agent's window). */
+  onClick?: () => void;
 }
 
 export interface IslandModule {

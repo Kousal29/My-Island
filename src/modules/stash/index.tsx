@@ -1,10 +1,14 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { AnimatePresence, motion } from "motion/react";
 import {
   AlertTriangle, Archive, Check, ClipboardList, Code2, Copy, ExternalLink, File, FileArchive, FileAudio, FileCode2, FileImage, FileSpreadsheet,
   FileText, FileVideo, Folder, FolderOpen, FolderPlus, Hash, Link2, Mail, MoreHorizontal, Palette, Phone, Pin, PinOff, Plus, RefreshCw, Search,
-  Trash2, Type, X, FileText as DocIcon, FolderInput,
+  Trash2, Type, X, FileText as DocIcon,
+  FileDown,
+  Paperclip, FilePlus2,
+  ChevronRight, Folders, FolderTree,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, isTauri } from "../../lib/bridge";
@@ -20,8 +24,9 @@ import { DOC_TEMPLATES } from "../../lib/docTemplates";
 import { docStats, plainPreview } from "../../lib/markdown";
 import { DocEditor } from "./DocEditor";
 import { WorkspaceDot } from "../../ui/workspaces";
+import { Glyph, InlineIcon } from "../../ui/icons";
 import { toast } from "../../state/toast";
-import { Chip, Empty, IconButton, Menu, bouncy, spring } from "../../ui/primitives";
+import { Chip, Empty, HScroll, IconButton, Menu, bouncy, spring } from "../../ui/primitives";
 import type { IslandModule } from "../types";
 
 const IMAGE_EXT = new Set(["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "avif", "ico"]);
@@ -74,15 +79,18 @@ function ItemMenu({ item }: { item: StashItem }) {
         item.kind === "link" && { label: "Copy link", icon: <Copy size={13} />, onSelect: () => void copy(item.link.url) },
         item.kind === "link" && { label: "Refresh preview", icon: <RefreshCw size={13} />, onSelect: () => void refreshLink(item.id) },
         item.kind === "clip" && { label: "Save as doc", icon: <DocIcon size={13} />, onSelect: () => (addNote(item.clip.text), toast("Saved as doc")) },
-        { header: "Move to workspace" },
+        { header: "Move to folder" },
         ...workspaces.map((w) => ({
-          label: `${w.emoji} ${w.name}${item.workspaceId === w.id ? "  ✓" : ""}`,
-          icon: <FolderInput size={12} />,
-          onSelect: () => (moveToWorkspace(item.id, w.id), toast(`Moved to ${w.emoji} ${w.name}`)),
+          label: w.name,
+          icon: <InlineIcon name={w.icon} color={w.color} />,
+          hint: item.workspaceId === w.id ? <Check size={12} /> : undefined,
+          onSelect: () => (moveToWorkspace(item.id, w.id), toast(`Moved to ${w.name}`)),
         })),
-        { header: "Collection" },
+        { header: "Subfolder" },
         ...collections.filter((c) => collectionInWorkspace(c, item.workspaceId ?? ALL)).map((c) => ({
-          label: `${item.collectionId === c.id ? "✓ " : ""}${c.emoji} ${c.name}`,
+          label: c.name,
+          icon: <InlineIcon name={c.icon} color={c.color} />,
+          hint: item.collectionId === c.id ? <Check size={12} /> : undefined,
           onSelect: () => moveTo(item.id, item.collectionId === c.id ? null : c.id),
         })),
         "sep",
@@ -129,7 +137,8 @@ function Row({ item, onClick, icon, title, subtitle, aside }: { item: StashItem;
           {showWs && ws && <WorkspaceDot ws={ws} size={14} />}
           {collection && (
             <span className="inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-[1px]" style={{ background: `color-mix(in oklab, ${collection.color} 18%, transparent)`, color: collection.color }}>
-              {collection.emoji} {collection.name}
+              <InlineIcon name={collection.icon} size={10} />
+              {collection.name}
             </span>
           )}
           <span className="truncate">{subtitle}</span>
@@ -288,23 +297,15 @@ function DocCard({ item, onOpen }: { item: NoteItem; onOpen: (id: string) => voi
   return (
     <motion.div
       layout="position"
-      initial={{ opacity: 0, y: -8, rotate: -0.6 }}
-      animate={{ opacity: 1, y: 0, rotate: 0 }}
-      exit={{ opacity: 0, scale: 0.95 }}
-      whileHover={{ y: -1.5 }}
-      whileTap={{ scale: 0.985 }}
+      initial={{ opacity: 0, y: -6 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, x: 20, transition: { duration: 0.15 } }}
       transition={spring}
-      className="clickable group relative flex items-start gap-2.5 rounded-2xl p-2.5 pr-2"
-      style={{ background: `color-mix(in oklab, ${c} 11%, #121217)`, boxShadow: `inset 0 0 0 1px color-mix(in oklab, ${c} 24%, transparent)` }}
+      className="clickable group relative flex items-center gap-3 rounded-2xl bg-white/[0.035] px-2.5 py-2 ring-1 ring-white/[0.05] transition-colors hover:bg-white/[0.065]"
       onClick={() => onOpen(item.id)}
     >
-      <motion.div
-        whileHover={{ rotate: -10, scale: 1.1 }}
-        transition={bouncy}
-        className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-[17px]"
-        style={{ background: `color-mix(in oklab, ${c} 22%, transparent)` }}
-      >
-        {item.note.emoji ?? "📝"}
+      <motion.div whileHover={{ rotate: -6 }} transition={bouncy}>
+        <Glyph name={item.note.icon ?? "doc"} color={c} size={34} />
       </motion.div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
@@ -320,7 +321,11 @@ function DocCard({ item, onOpen }: { item: NoteItem; onOpen: (id: string) => voi
             </span>
           )}
           <span>{st.words} words</span>
-          {st.tasks > 0 && <span>☑ {st.done}/{st.tasks}</span>}
+          {st.tasks > 0 && (
+            <span className="inline-flex items-center gap-1">
+              <Check size={10} /> {st.done}/{st.tasks}
+            </span>
+          )}
           <span>{timeAgo(item.updatedAt)}</span>
         </div>
       </div>
@@ -343,6 +348,17 @@ function StashItemView({ item, onOpenDoc }: { item: StashItem; onOpenDoc: (id: s
   }
 }
 
+/** Native file/folder picker → stash (paths only; files stay where they are). */
+async function pickAndStash(directory: boolean) {
+  if (!isTauri) return;
+  const picked = await openDialog({ multiple: true, directory, title: directory ? "Add a folder to your stash" : "Add files to your stash" });
+  const paths = picked === null ? [] : Array.isArray(picked) ? picked : [picked];
+  if (!paths.length) return;
+  const n = await useStash.getState().addFiles(paths);
+  play(n ? "success" : "tick");
+  toast(n ? `Added ${n} ${directory ? "folder" : "file"}${n > 1 ? "s" : ""}` : "Already in your stash");
+}
+
 function Composer({ searchRef, query, setQuery, onNewDoc }: { searchRef: React.RefObject<HTMLInputElement | null>; query: string; setQuery: (q: string) => void; onNewDoc: (template: string) => void }) {
   const { addLink, addNote } = useStash();
   const [mode, setMode] = useState<"search" | "add">("add");
@@ -359,8 +375,7 @@ function Composer({ searchRef, query, setQuery, onNewDoc }: { searchRef: React.R
   };
 
   return (
-    <div className="flex items-center gap-1.5">
-      <div className="flex h-9 flex-1 items-center gap-2 rounded-2xl bg-white/6 pr-1.5 pl-3 ring-1 ring-white/6 transition focus-within:bg-white/8 focus-within:ring-[var(--accent)]/45">
+    <div className="flex h-10 items-center gap-2 rounded-2xl bg-white/[0.055] pr-1 pl-3 ring-1 ring-white/[0.06] transition focus-within:bg-white/[0.08] focus-within:ring-[var(--accent)]/45">
         <AnimatePresence mode="popLayout" initial={false}>
           <motion.span key={mode + String(isUrl)} initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.5, opacity: 0 }} className="text-ink-3">
             {mode === "search" ? <Search size={15} /> : isUrl ? <Link2 size={15} /> : <Plus size={15} />}
@@ -402,28 +417,40 @@ function Composer({ searchRef, query, setQuery, onNewDoc }: { searchRef: React.R
             {isUrl ? "Save link" : "Save as doc"}
           </motion.button>
         )}
-      </div>
+      <div className="mx-0.5 h-4 w-px shrink-0 bg-white/10" />
       <Menu
         trigger={(open) => (
-          <IconButton label="New doc (Ctrl+N)" tone="solid" onClick={open}>
-            <Plus size={15} />
-          </IconButton>
+          <button onClick={open} title="Add files or a folder" aria-label="Add files or a folder" className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-ink-3 transition-colors hover:bg-white/10 hover:text-ink">
+            <Paperclip size={14} />
+          </button>
+        )}
+        items={[
+          { label: "Add files…", icon: <FilePlus2 size={13} />, onSelect: () => void pickAndStash(false) },
+          { label: "Add a folder…", icon: <FolderPlus size={13} />, onSelect: () => void pickAndStash(true) },
+        ]}
+      />
+      <Menu
+        trigger={(open) => (
+          <button onClick={open} title="New doc (Ctrl+N)" aria-label="New doc" className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-ink-3 transition-colors hover:bg-white/10 hover:text-ink">
+            <FilePlus2 size={14} />
+          </button>
         )}
         items={[
           { header: "New doc from template" },
-          ...DOC_TEMPLATES.map((t) => ({ label: t.label, icon: <span className="text-[13px]">{t.emoji}</span>, onSelect: () => onNewDoc(t.id) })),
+          ...DOC_TEMPLATES.map((t) => ({ label: t.label, icon: <InlineIcon name={t.icon} />, onSelect: () => onNewDoc(t.id) })),
         ]}
       />
-      <IconButton
-        label={mode === "search" ? "Close search (Esc)" : "Search (Ctrl+F)"}
-        active={mode === "search"}
+      <button
+        title={mode === "search" ? "Close search (Esc)" : "Search (Ctrl+F)"}
+        aria-label="Search"
         onClick={() => {
           setMode(mode === "search" ? "add" : "search");
           setQuery("");
         }}
+        className={cx("grid h-7 w-7 shrink-0 place-items-center rounded-full text-ink-3 transition-colors hover:bg-white/10 hover:text-ink", mode === "search" && "bg-white/12 text-ink")}
       >
-        {mode === "search" ? <X size={15} /> : <Search size={15} />}
-      </IconButton>
+        {mode === "search" ? <X size={14} /> : <Search size={14} />}
+      </button>
       <SearchHotkey onOpen={() => setMode("search")} />
     </div>
   );
@@ -468,7 +495,7 @@ function CollectionPicker() {
             setNaming(false);
           }
         }}
-        placeholder="Collection name"
+        placeholder="Subfolder name"
         className="h-7 w-32 rounded-full bg-white/8 px-2.5 text-[12px] outline-none"
       />
     );
@@ -481,23 +508,23 @@ function CollectionPicker() {
           className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full bg-white/6 px-2.5 text-[12px] font-medium text-ink-2 hover:bg-white/10"
           style={current ? { color: current.color, background: `color-mix(in oklab, ${current.color} 16%, transparent)` } : undefined}
         >
-          {current ? `${current.emoji} ${current.name}` : <><Archive size={12} /> Everything</>}
+          {current ? <><InlineIcon name={current.icon} size={12} /> {current.name}</> : <><FolderTree size={12} /> Subfolders</>}
         </button>
       )}
       items={[
-        { label: "Everything", icon: <Archive size={13} />, onSelect: () => setCollection(null) },
+        { label: "Whole folder", icon: <Archive size={13} />, onSelect: () => setCollection(null) },
         "sep",
         ...collections.map((c) => ({
           label: (
             <span className="flex w-full justify-between gap-4">
-              <span>{c.emoji} {c.name}</span>
+              <span className="flex items-center gap-2"><InlineIcon name={c.icon} color={c.color} /> {c.name}</span>
               <span className="text-ink-4">{items.filter((i) => i.collectionId === c.id).length}</span>
             </span>
           ),
           onSelect: () => setCollection(c.id),
         })),
         "sep",
-        { label: "New collection", icon: <FolderPlus size={13} />, onSelect: () => setNaming(true) },
+        { label: "New subfolder", icon: <FolderPlus size={13} />, onSelect: () => setNaming(true) },
         current && { label: `Delete “${current.name}”`, icon: <Trash2 size={13} />, danger: true, onSelect: () => removeCollection(current.id) },
       ]}
     />
@@ -512,6 +539,149 @@ const FILTERS: { id: StashFilter; label: string; icon: React.ReactNode }[] = [
   { id: "clip", label: "Clipboard", icon: <ClipboardList size={11} /> },
   { id: "note", label: "Docs", icon: <DocIcon size={11} /> },
 ];
+
+/** All folders › Work › Docs — every part is clickable. */
+function Breadcrumb() {
+  const { workspaces, current, setCurrent } = useWorkspaces();
+  const { collection, setCollection, collections } = useStash();
+  const ws = workspaces.find((w) => w.id === current) ?? null;
+  const sub = collections.find((c) => c.id === collection) ?? null;
+  const crumb = (label: React.ReactNode, onClick: (() => void) | null, key: string) => (
+    <motion.button
+      key={key}
+      layout="position"
+      initial={{ opacity: 0, x: -6 }}
+      animate={{ opacity: 1, x: 0 }}
+      disabled={!onClick}
+      onClick={onClick ?? undefined}
+      className={cx(
+        "flex h-7 min-w-0 items-center gap-1.5 rounded-lg px-1.5 text-[12.5px] transition-colors",
+        onClick ? "text-ink-3 hover:bg-white/6 hover:text-ink" : "font-semibold text-ink",
+      )}
+    >
+      {label}
+    </motion.button>
+  );
+  const sep = (k: string) => <ChevronRight key={k} size={12} className="shrink-0 text-ink-4" />;
+  return (
+    <div className="flex max-w-[45%] min-w-0 shrink-0 items-center gap-0.5">
+      {crumb(
+        <>
+          <Folders size={14} /> {ws ? "" : "All folders"}
+        </>,
+        ws ? () => (setCurrent(ALL), setCollection(null)) : null,
+        "all",
+      )}
+      {ws && sep("s1")}
+      {ws &&
+        crumb(
+          <>
+            <WorkspaceDot ws={ws} size={16} /> <span className="truncate">{ws.name}</span>
+          </>,
+          sub ? () => setCollection(null) : null,
+          "ws",
+        )}
+      {sub && sep("s2")}
+      {sub &&
+        crumb(
+          <>
+            <InlineIcon name={sub.icon} color={sub.color} size={12} /> <span className="truncate">{sub.name}</span>
+          </>,
+          null,
+          "sub",
+        )}
+    </div>
+  );
+}
+
+function FolderGrid() {
+  const { workspaces, setCurrent, create } = useWorkspaces();
+  const items = useStash((s) => s.items);
+  const counts = useMemo(() => {
+    const m = new Map<string, number>();
+    items.forEach((i) => i.workspaceId && m.set(i.workspaceId, (m.get(i.workspaceId) ?? 0) + 1));
+    return m;
+  }, [items]);
+  return (
+    <div className="mb-2 grid grid-cols-3 gap-1.5">
+      {workspaces.map((w, i) => (
+        <motion.button
+          key={w.id}
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0, transition: { delay: i * 0.03 } }}
+          whileHover={{ y: -2 }}
+          whileTap={{ scale: 0.96 }}
+          onClick={() => {
+            setCurrent(w.id);
+            play("tick");
+          }}
+          className="flex items-center gap-2.5 rounded-2xl bg-white/[0.045] p-2.5 text-left ring-1 ring-white/[0.05] transition-colors hover:bg-white/[0.08]"
+        >
+          <Glyph name={w.icon} color={w.color} size={30} />
+          <span className="min-w-0">
+            <span className="block truncate text-[12.5px] font-semibold text-ink">{w.name}</span>
+            <span className="block text-[10.5px] text-ink-3">{counts.get(w.id) ?? 0} items</span>
+          </span>
+        </motion.button>
+      ))}
+      <motion.button
+        whileHover={{ y: -2 }}
+        whileTap={{ scale: 0.96 }}
+        onClick={() => {
+          const w = create("New folder");
+          useIsland.getState().set({ settingsOpen: true, settingsSection: "workspaces" });
+          toast(`Created “${w.name}” — rename it in Folders`);
+        }}
+        className="flex items-center justify-center gap-2 rounded-2xl border border-dashed border-white/12 p-2.5 text-[12px] text-ink-3 hover:border-white/25 hover:text-ink-2"
+      >
+        <FolderPlus size={15} /> New folder
+      </motion.button>
+    </div>
+  );
+}
+
+const GROUPS: { id: StashFilter; label: string; icon: React.ReactNode; match: (i: StashItem) => boolean }[] = [
+  { id: "pinned", label: "Pinned", icon: <Pin size={11} />, match: (i) => i.pinned },
+  { id: "note", label: "Docs", icon: <DocIcon size={11} />, match: (i) => !i.pinned && i.kind === "note" },
+  { id: "file", label: "Files", icon: <File size={11} />, match: (i) => !i.pinned && i.kind === "file" },
+  { id: "link", label: "Links", icon: <Link2 size={11} />, match: (i) => !i.pinned && i.kind === "link" },
+  { id: "clip", label: "Clipboard", icon: <ClipboardList size={11} />, match: (i) => !i.pinned && i.kind === "clip" },
+];
+
+/** "All" view: tidy sections (Pinned, Docs, Files, Links, Clipboard), 4 items each + "See all". */
+function GroupedList({ items, onOpenDoc, onSeeAll }: { items: StashItem[]; onOpenDoc: (id: string) => void; onSeeAll: (f: StashFilter) => void }) {
+  return (
+    <div className="space-y-3">
+      {GROUPS.map((g) => {
+        const list = items.filter(g.match);
+        if (!list.length) return null;
+        return (
+          <section key={g.id}>
+            <div className="mb-1 flex items-center justify-between px-1">
+              <span className="flex items-center gap-1.5 text-[10.5px] font-semibold tracking-[0.08em] text-ink-3 uppercase">
+                {g.icon}
+                {g.label}
+                <span className="tabular font-medium text-ink-4">{list.length}</span>
+              </span>
+              {list.length > 4 && (
+                <button onClick={() => onSeeAll(g.id)} className="flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10.5px] text-ink-3 hover:bg-white/6 hover:text-ink">
+                  See all <ChevronRight size={11} />
+                </button>
+              )}
+            </div>
+            <div className="space-y-0.5">
+              <AnimatePresence initial={false} mode="popLayout">
+                {list.slice(0, 4).map((i) => (
+                  <StashItemView key={i.id} item={i} onOpenDoc={onOpenDoc} />
+                ))}
+              </AnimatePresence>
+            </div>
+          </section>
+        );
+      })}
+    </div>
+  );
+}
 
 function StashView() {
   const { items: allItems, filter, setFilter, collection, setCollection, collections, clearClips, refreshFiles, addNote } = useStash();
@@ -542,7 +712,7 @@ function StashView() {
     (templateId: string) => {
       const t = DOC_TEMPLATES.find((x) => x.id === templateId) ?? DOC_TEMPLATES[0];
       const d = addNote(t.body(), t.title);
-      useStash.getState().update(d.id, { note: { ...d.note, emoji: t.emoji } } as Partial<NoteItem>);
+      useStash.getState().update(d.id, { note: { ...d.note, icon: t.icon } } as Partial<NoteItem>);
       play("pop");
       setEditing(d.id);
     },
@@ -591,8 +761,10 @@ function StashView() {
 
   return (
     <motion.div key="list" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={spring} className="relative flex h-full flex-col gap-2">
-      <div className="flex items-center gap-1">
-        <div className="scroll flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto [scrollbar-width:none]">
+      <div className="flex min-w-0 items-center gap-1.5">
+        <Breadcrumb />
+        <div className="h-4 w-px shrink-0 bg-white/10" />
+        <HScroll className="flex-1" watch={filter}>
           {FILTERS.map((f) => (
             <Chip key={f.id} active={filter === f.id} onClick={() => setFilter(f.id)} layoutGroup="stash-filter">
               {f.icon}
@@ -600,45 +772,53 @@ function StashView() {
               {!!counts[f.id] && <span className="tabular text-[10px] text-ink-3">{counts[f.id]}</span>}
             </Chip>
           ))}
-        </div>
-        <CollectionPicker />
+        </HScroll>
+        {ws !== ALL && <CollectionPicker />}
       </div>
 
       <Composer searchRef={searchRef} query={query} setQuery={setQuery} onNewDoc={newDoc} />
 
       <div className="scroll fade-y -mx-1 min-h-0 flex-1 px-1 py-1">
+        {ws === ALL && !query && filter === "all" && <FolderGrid />}
         {shown.length === 0 ? (
           query ? (
-            <Empty icon="🔍" title="No matches" hint={`Nothing saved matches “${query}”.`} />
+            <Empty icon={<Search size={20} />} title="No matches" hint={`Nothing saved matches “${query}”.`} />
           ) : filter === "clip" ? (
-            <Empty icon="📋" title="Clipboard history is empty" hint="Copy anything — it shows up here. Press Ctrl+Alt+V to jump here anytime." />
+            <Empty icon={<ClipboardList size={20} />} title="Clipboard history is empty" hint="Copy anything — it shows up here. Press Ctrl+Alt+V to jump here anytime." />
           ) : filter === "file" ? (
-            <Empty icon="🗂️" title="Drop files here" hint="Drag files onto the island to keep them handy. Only the location is stored — never a copy." />
+            <Empty icon={<FolderOpen size={20} />} title="Drop files here" hint="Drag files onto the island to keep them handy. Only the location is stored — never a copy." />
           ) : filter === "note" ? (
-            <Empty icon="📄" title={curWs ? `No docs in ${curWs.name} yet` : "No docs yet"} hint="Write project docs, meeting notes, READMEs — with checklists and formatting. Press Ctrl+N.">
+            <Empty icon={<DocIcon size={20} />} title={curWs ? `No docs in ${curWs.name} yet` : "No docs yet"} hint="Write project docs, meeting notes, READMEs — with checklists and formatting. Press Ctrl+N.">
               <div className="mt-2 flex flex-wrap justify-center gap-1.5">
                 {DOC_TEMPLATES.slice(1, 4).map((t) => (
                   <motion.button key={t.id} whileHover={{ y: -2 }} whileTap={{ scale: 0.94 }} onClick={() => newDoc(t.id)} className="rounded-full bg-white/7 px-2.5 py-1 text-[11.5px] text-ink-2 hover:bg-white/12">
-                    {t.emoji} {t.label}
+                    <span className="flex items-center gap-1.5">
+                      <InlineIcon name={t.icon} size={12} />
+                      {t.label}
+                    </span>
                   </motion.button>
                 ))}
               </div>
             </Empty>
           ) : (
             <Empty
-              icon={curWs?.emoji ?? "🧺"}
+              icon={curWs ? <InlineIcon name={curWs.icon} color={curWs.color} size={20} /> : <Archive size={20} />}
               title={curWs ? `${curWs.name} is empty` : "Your stash is empty"}
               hint="Drop files, paste links, write docs. Clipboard history is captured automatically."
             />
           )
         ) : (
           <div className="space-y-0.5">
-            <AnimatePresence initial={false} mode="popLayout">
-              {shown.map((i) => (
-                <StashItemView key={i.id} item={i} onOpenDoc={setEditing} />
-              ))}
-            </AnimatePresence>
-            {visible.length > limit && (
+            {filter === "all" && !query ? (
+              <GroupedList items={visible} onOpenDoc={setEditing} onSeeAll={setFilter} />
+            ) : (
+              <AnimatePresence initial={false} mode="popLayout">
+                {shown.map((i) => (
+                  <StashItemView key={i.id} item={i} onOpenDoc={setEditing} />
+                ))}
+              </AnimatePresence>
+            )}
+            {(filter !== "all" || query) && visible.length > limit && (
               <button onClick={() => setLimit(limit + 60)} className="mx-auto mt-1 block rounded-full px-3 py-1 text-[11.5px] text-ink-3 hover:bg-white/6 hover:text-ink-2">
                 Show {Math.min(60, visible.length - limit)} more
               </button>
@@ -676,14 +856,14 @@ function StashView() {
                 transition={{ scale: { type: "spring", stiffness: 500, damping: 14 }, y: { duration: 1, repeat: Infinity, ease: "easeInOut" } }}
                 className="text-[34px]"
               >
-                {dragKind === "files" ? "📥" : dragKind === "link" ? "🔗" : "📝"}
+                {dragKind === "files" ? <FileDown size={34} strokeWidth={1.6} /> : dragKind === "link" ? <Link2 size={34} strokeWidth={1.6} /> : <DocIcon size={34} strokeWidth={1.6} />}
               </motion.div>
               <div className="text-[14px] font-semibold">
                 {dragKind === "files" ? `Drop ${dragCount > 1 ? `${dragCount} files` : "file"} to stash` : dragKind === "link" ? "Drop to save link" : "Drop text to save as a doc"}
               </div>
               <div className="text-[11.5px] text-ink-3">
-                {curWs ? `Into ${curWs.emoji} ${curWs.name}` : "Into Personal"}
-                {collection ? " · this collection" : ""}
+                {curWs ? `Into ${curWs.name}` : "Into Personal"}
+                {collection ? " · this subfolder" : ""}
                 {dragKind === "files" ? " · files stay where they are" : ""}
               </div>
             </div>
@@ -698,9 +878,9 @@ export const stashModule: IslandModule = {
   id: "stash",
   title: "Stash",
   icon: Archive,
-  size: { w: 640, h: 430 },
+  size: { w: 660, h: 440 },
   View: StashView,
-  description: "Files, links, docs and clipboard history — organised by workspace and collection.",
+  description: "Files, links, docs and clipboard history — organised into folders and subfolders.",
 };
 
 export { copy as copyToClipboard };

@@ -123,7 +123,7 @@ export function BatteryGlyph({ b, width = 26 }: { b: Battery; width?: number }) 
 
 function StatsView() {
   const { stats, cpuHistory, memHistory, netHistory } = useLive();
-  if (!stats) return <Empty icon="📊" title="Gathering stats…" hint="First readings arrive within a couple of seconds." />;
+  if (!stats) return <Empty icon={<Activity size={20} />} title="Gathering stats…" hint="First readings arrive within a couple of seconds." />;
   const memPct = stats.memTotal ? stats.memUsed / stats.memTotal : 0;
   const diskPct = stats.diskTotal ? stats.diskUsed / stats.diskTotal : 0;
   const b = stats.battery;
@@ -176,7 +176,7 @@ function StatsView() {
                 {b.charging ? "Charging" : b.plugged ? "Plugged in · full" : low ? "Low battery" : "On battery"}
               </div>
               <div className="text-ink-3">
-                {b.secondsLeft && !b.plugged ? `${formatUptime(b.secondsLeft)} remaining` : b.charging ? "Topping up ⚡" : "Power source: AC"}
+                {b.secondsLeft && !b.plugged ? `${formatUptime(b.secondsLeft)} remaining` : b.charging ? "Topping up" : "Power source: AC"}
               </div>
             </div>
           </>
@@ -237,7 +237,7 @@ export const statsModule: IslandModule = {
   id: "stats",
   title: "System",
   icon: Activity,
-  size: { w: 600, h: 340 },
+  size: { w: 620, h: 352 },
   View: StatsView,
   description: "Live CPU, memory, battery, network and disk with 90-second history.",
 };

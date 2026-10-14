@@ -14,6 +14,7 @@ export interface Transient {
   center?: ReactNode;
   width?: number;
   opens?: string;
+  onClick?: () => void;
   expiresAt: number;
 }
 

@@ -82,6 +82,7 @@ export function Chip({
   return (
     <motion.button
       onClick={onClick}
+      data-active={active ? "true" : undefined}
       whileTap={{ scale: 0.92 }}
       transition={bouncy}
       className={cx(
@@ -290,9 +291,10 @@ export function Empty({ icon, title, hint, children }: { icon: ReactNode; title:
       className="flex h-full flex-col items-center justify-center gap-2 py-6 text-center"
     >
       <motion.div
-        animate={{ y: [0, -4, 0] }}
-        transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }}
-        className="grid h-12 w-12 place-items-center rounded-2xl bg-white/6 text-[22px]"
+        initial={{ scale: 0.6, rotate: -8 }}
+        animate={{ scale: 1, rotate: 0 }}
+        transition={bouncy}
+        className="grid h-12 w-12 place-items-center rounded-2xl bg-white/6 text-ink-2"
       >
         {icon}
       </motion.div>
@@ -384,9 +386,9 @@ export function Popover({
             <motion.div
               ref={panel}
               data-popover-open=""
-              initial={{ opacity: 0, scale: 0.9, y: pos.up ? 6 : -6, filter: "blur(4px)" }}
-              animate={{ opacity: 1, scale: 1, y: 0, filter: "blur(0px)" }}
-              exit={{ opacity: 0, scale: 0.95, filter: "blur(2px)", transition: { duration: 0.12 } }}
+              initial={{ opacity: 0, scale: 0.94, y: pos.up ? 6 : -6 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.97, transition: { duration: 0.1 } }}
               transition={spring}
               className={cx(
                 "fixed z-[100] rounded-2xl border border-white/10 bg-panel-2/98 p-1 shadow-[0_18px_40px_-8px_rgba(0,0,0,0.85)] backdrop-blur-xl",
@@ -460,6 +462,83 @@ export function Menu({
         )
       }
     </Popover>
+  );
+}
+
+/**
+ * Horizontal row that scrolls: mouse wheel scrolls sideways, edges fade when there's more,
+ * arrow buttons appear on hover, and the `data-active` child is kept in view.
+ */
+export function HScroll({ children, className, watch }: { children: ReactNode; className?: string; watch?: unknown }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [edges, setEdges] = useState({ left: false, right: false });
+  const update = () => {
+    const el = ref.current;
+    if (!el) return;
+    const left = el.scrollLeft > 2;
+    const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 2;
+    // Bail out when unchanged: this runs after every render, so a fresh object would loop forever.
+    setEdges((e) => (e.left === left && e.right === right ? e : { left, right }));
+  };
+  useLayoutEffect(update);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (el.scrollWidth <= el.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+      e.preventDefault();
+      el.scrollBy({ left: e.deltaY * 1.2, behavior: "smooth" });
+    };
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      ro.disconnect();
+      el.removeEventListener("wheel", onWheel);
+    };
+  }, []);
+  useEffect(() => {
+    const active = ref.current?.querySelector<HTMLElement>('[data-active="true"]');
+    active?.scrollIntoView({ inline: "nearest", block: "nearest", behavior: "smooth" });
+  }, [watch]);
+  const page = (dir: 1 | -1) => ref.current?.scrollBy({ left: dir * ref.current.clientWidth * 0.7, behavior: "smooth" });
+  const arrow = (dir: 1 | -1) => (
+    <motion.button
+      key={dir}
+      initial={{ opacity: 0, scale: 0.6 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.6 }}
+      transition={{ duration: 0.15 }}
+      onClick={() => page(dir)}
+      aria-label={dir < 0 ? "Scroll left" : "Scroll right"}
+      className={cx(
+        "absolute top-1/2 z-10 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-full bg-panel-3 text-ink-2 opacity-0 shadow-[0_2px_8px_rgba(0,0,0,0.6)] ring-1 ring-white/10 transition-opacity group-hover/hs:opacity-100 hover:text-ink",
+        dir < 0 ? "left-0" : "right-0",
+      )}
+    >
+      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d={dir < 0 ? "M6.5 2 L3.5 5 L6.5 8" : "M3.5 2 L6.5 5 L3.5 8"} />
+      </svg>
+    </motion.button>
+  );
+  return (
+    <div className={cx("group/hs relative min-w-0", className)}>
+      <div ref={ref} onScroll={update} className="flex items-center gap-0.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {children}
+      </div>
+      <div
+        className="pointer-events-none absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-island to-transparent transition-opacity duration-200"
+        style={{ opacity: edges.left ? 1 : 0 }}
+      />
+      <div
+        className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-island to-transparent transition-opacity duration-200"
+        style={{ opacity: edges.right ? 1 : 0 }}
+      />
+      <AnimatePresence>
+        {edges.left && arrow(-1)}
+        {edges.right && arrow(1)}
+      </AnimatePresence>
+    </div>
   );
 }
 

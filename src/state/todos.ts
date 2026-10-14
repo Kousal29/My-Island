@@ -3,6 +3,7 @@ import { persist } from "../lib/persist";
 import { uid } from "../lib/util";
 import { bus } from "../lib/bus";
 import { parseQuickAdd } from "../lib/quickAdd";
+import { toIcon } from "../ui/icons";
 import { ALL, DEFAULT_WS, inWorkspace, targetWorkspace, useWorkspaces } from "./workspaces";
 
 export type Priority = 0 | 1 | 2 | 3;
@@ -28,7 +29,7 @@ export interface Todo {
 }
 
 /** workspaceId null = shared list (Inbox). */
-export interface TodoList { id: string; name: string; emoji: string; color: string; workspaceId: string | null }
+export interface TodoList { id: string; name: string; icon: string; color: string; workspaceId: string | null }
 
 export type TodoView = "today" | "upcoming" | "all" | "done" | `list:${string}`;
 export type TodoSort = "manual" | "due" | "priority";
@@ -49,7 +50,7 @@ interface TodoState {
   toggleSubtask: (id: string, subId: string) => void;
   removeSubtask: (id: string, subId: string) => void;
   clearDone: () => void;
-  addList: (name: string, emoji?: string, color?: string) => string;
+  addList: (name: string, icon?: string, color?: string) => string;
   updateList: (id: string, patch: Partial<TodoList>) => void;
   removeList: (id: string) => void;
   dropWorkspace: (workspaceId: string, mode: "move" | "delete") => void;
@@ -63,9 +64,9 @@ const INBOX = "inbox";
 
 export const useTodos = create<TodoState>((set, get) => ({
   lists: [
-    { id: INBOX, name: "Inbox", emoji: "📥", color: "#8b7bff", workspaceId: null },
-    { id: "errands", name: "Errands", emoji: "🛒", color: "#3fe0b0", workspaceId: DEFAULT_WS },
-    { id: "sprint", name: "This sprint", emoji: "🏃", color: "#4fb4ff", workspaceId: "work" },
+    { id: INBOX, name: "Inbox", icon: "inbox", color: "#8b7bff", workspaceId: null },
+    { id: "errands", name: "Errands", icon: "cart", color: "#3fe0b0", workspaceId: DEFAULT_WS },
+    { id: "sprint", name: "This sprint", icon: "bolt", color: "#4fb4ff", workspaceId: "work" },
   ],
   todos: [],
   view: "today",
@@ -134,10 +135,10 @@ export const useTodos = create<TodoState>((set, get) => ({
     if (t) get().update(id, { subtasks: t.subtasks.filter((s) => s.id !== subId) });
   },
   clearDone: () => set({ todos: get().todos.filter((t) => !t.done) }),
-  addList: (name, emoji = "📝", color) => {
+  addList: (name, icon = "list", color) => {
     const id = uid();
     const lists = get().lists;
-    set({ lists: [...lists, { id, name, emoji, color: color ?? LIST_COLORS[lists.length % LIST_COLORS.length], workspaceId: targetWorkspace() }] });
+    set({ lists: [...lists, { id, name, icon, color: color ?? LIST_COLORS[lists.length % LIST_COLORS.length], workspaceId: targetWorkspace() }] });
     return id;
   },
   updateList: (id, patch) => set({ lists: get().lists.map((l) => (l.id === id ? { ...l, ...patch } : l)) }),
@@ -214,13 +215,14 @@ export const listInWorkspace = (l: TodoList, ws: string) => inWorkspace(l.worksp
 export const hydrateTodos = () =>
   persist(useTodos, {
     key: "todos",
-    version: 2,
+    version: 3,
     migrations: {
       1: (d) => ({
         ...d,
         todos: (d.todos ?? []).map((t: Todo) => ({ ...t, workspaceId: DEFAULT_WS })),
         lists: (d.lists ?? []).map((l: TodoList) => ({ ...l, workspaceId: l.id === INBOX ? null : DEFAULT_WS })),
       }),
+      2: (d) => ({ ...d, lists: (d.lists ?? []).map(({ emoji, ...l }: any) => ({ ...l, icon: toIcon(emoji, "list") })) }),
     },
     pick: (s) => ({ lists: s.lists, todos: s.todos, view: s.view, sort: s.sort, showDone: s.showDone }),
     apply: (d) => d,

@@ -1,5 +1,5 @@
 import { motion } from "motion/react";
-import { BatteryCharging, BatteryWarning, Check, ClipboardCheck, Files, PartyPopper, TimerReset } from "lucide-react";
+import { BatteryCharging, BatteryWarning, Bot, Check, ClipboardCheck, Eye, Files, PartyPopper, Phone, TimerReset } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Island } from "./island/Island";
 import { api, on } from "./lib/bridge";
@@ -18,7 +18,12 @@ import { hydrateTodos } from "./state/todos";
 import { hydrateWorkspaces } from "./state/workspaces";
 import { toast } from "./state/toast";
 import { BatteryGlyph } from "./modules/stats";
-import { startBuddyBridge } from "./state/buddy";
+import { petReact, startBuddyBridge } from "./state/buddy";
+import { hydrateAlerts, startAlertFeeds, startAlertSweeper } from "./state/alerts";
+import { hydrateAgents, sessionSummary, startAgentSweeper } from "./state/agents";
+import { hydrateWellness, startWellnessLoop } from "./state/wellness";
+import { AlertIcon } from "./modules/alerts";
+import { Marquee } from "./ui/primitives";
 
 const pop = { initial: { scale: 0, rotate: -30 }, animate: { scale: 1, rotate: 0 }, transition: { type: "spring", stiffness: 600, damping: 14 } } as const;
 
@@ -42,7 +47,11 @@ function useAccent() {
 }
 
 function useBackendSync() {
-  const { autohideFullscreen, clipboardCapture, monitor, reduceMotion } = useSettings();
+  const { autohideFullscreen, clipboardCapture, monitor, reduceMotion, mirrorNotifications, hidePetFromCapture, hideIslandFromCapture } = useSettings();
+  useEffect(() => void api.setNotifyEnabled(mirrorNotifications), [mirrorNotifications]);
+  const petEyesFollow = useSettings((s) => s.petEyesFollow);
+  useEffect(() => void api.setBuddyLook(petEyesFollow), [petEyesFollow]);
+  useEffect(() => void api.setCapturePrivacy(hidePetFromCapture, hideIslandFromCapture), [hidePetFromCapture, hideIslandFromCapture]);
   useEffect(() => void api.setAutohideFullscreen(autohideFullscreen), [autohideFullscreen]);
   useEffect(() => void api.setClipboardCapture(clipboardCapture), [clipboardCapture]);
   useEffect(() => void api.setMonitor(monitor), [monitor]);
@@ -191,6 +200,118 @@ function wireClipboard() {
   });
 }
 
+/** Notifications, calls and agent events → live activities in the pill + pet reactions. */
+function wireAlerts() {
+  const two = (title: string, body: string) => (
+    <span className="flex min-w-0 flex-col leading-tight">
+      <span className="truncate text-[11.5px] font-semibold text-ink">{title}</span>
+      {body && <Marquee text={body.replace(/\s+/g, " ")} className="max-w-[200px] text-[10.5px] text-ink-3" />}
+    </span>
+  );
+  return startAlertFeeds({
+    shouldMirror: () => useSettings.getState().mirrorNotifications,
+    onToast: (t, a) => {
+      const call = t.kind === "call";
+      showActivity({
+        id: "toast",
+        priority: call ? 96 : 82,
+        ttl: call ? 20000 : 6000,
+        width: 340,
+        opens: "alerts",
+        left: (
+          <motion.span {...pop} className="flex">
+            {call ? (
+              <motion.span animate={{ rotate: [0, -14, 14, -10, 10, 0] }} transition={{ duration: 0.7, repeat: Infinity, repeatDelay: 0.6 }} className="grid h-6 w-6 place-items-center rounded-full bg-good text-black">
+                <Phone size={12} />
+              </motion.span>
+            ) : (
+              <AlertIcon a={a} size={22} />
+            )}
+          </motion.span>
+        ),
+        center: two(t.title, t.body),
+        right: <span className="max-w-[70px] truncate text-[10px] text-ink-4">{t.app}</span>,
+      });
+      if (call) react("curious", 2000, "Incoming call!");
+    },
+    onAgent: (e, _a, session) => {
+      if (e.kind === "attention") {
+        // Stays in the pill (live session view) until the agent continues.
+        play("chime");
+        petReact("curious", 2400, "Needs you!");
+        return;
+      }
+      if (e.kind === "done") {
+        play("success");
+        petReact("proud", 2600, "All done!");
+        const files = session?.files.slice(0, 3).join(", ");
+        showActivity({
+          id: `agent-done-${e.session}`,
+          priority: 88,
+          ttl: 12000,
+          width: 380,
+          opens: "alerts",
+          left: (
+            <motion.span {...pop} className="grid h-7 w-7 place-items-center rounded-full bg-good text-black shadow-[0_0_14px_rgba(63,224,176,0.45)]">
+              <Check size={15} strokeWidth={3} />
+            </motion.span>
+          ),
+          center: (
+            <span className="flex min-w-0 flex-col leading-tight">
+              <span className="truncate text-[11.5px] font-semibold text-ink">
+                {e.source} finished{e.project ? ` · ${e.project}` : ""}
+              </span>
+              <span className="truncate text-[10.5px] text-ink-3">{[session ? sessionSummary(session) : "", files, !session || !sessionSummary(session) ? e.body || "All done" : ""].filter(Boolean).join(" · ")}</span>
+            </span>
+          ),
+        });
+        return;
+      }
+      if (e.kind === "info") {
+        showActivity({
+          id: "agent",
+          priority: 84,
+          ttl: 9000,
+          width: 360,
+          opens: "alerts",
+          left: (
+            <motion.span {...pop} className="grid h-6 w-6 place-items-center rounded-full bg-[var(--accent)] text-black">
+              <Bot size={13} />
+            </motion.span>
+          ),
+          center: two(`${e.source}${e.project ? ` · ${e.project}` : ""}`, e.body || e.title),
+        });
+      }
+    },
+    onCall: (c, prev) => {
+      if (c.active && c.meeting && !prev) play("pop");
+    },
+  });
+}
+
+function wireWellness() {
+  return startWellnessLoop(
+    (r) => {
+      play("chime");
+      if (r === "water") petReact("eat", 2400, "Water break?");
+      else if (r === "eyes") petReact("curious", 2400, "Rest your eyes?");
+      else petReact("excited", 2400, "Stretch time!");
+    },
+    () => {
+      play("success");
+      petReact("happy", 2000, "Refreshed!");
+      showActivity({
+        id: "eyes-done",
+        priority: 80,
+        ttl: 2200,
+        width: 220,
+        left: <Eye size={15} className="text-[#cdb8ff]" />,
+        center: <span className="text-[12px] font-medium text-ink-2">Eyes rested</span>,
+      });
+    },
+  );
+}
+
 export default function App() {
   const [ready, setReady] = useState(false);
   useAccent();
@@ -199,14 +320,14 @@ export default function App() {
   useEffect(() => {
     let cleanup: (() => void)[] = [];
     let cancelled = false;
-    void Promise.allSettled([hydrateWorkspaces(), hydrateSettings(), hydrateTodos(), hydrateStash(), hydratePet(), hydrateTimer()]).then(() => {
+    void Promise.allSettled([hydrateWorkspaces(), hydrateSettings(), hydrateTodos(), hydrateStash(), hydratePet(), hydrateTimer(), hydrateAlerts(), hydrateWellness(), hydrateAgents()]).then(() => {
       if (cancelled) return;
-      cleanup = [startLiveFeeds(), startPetBrain(), startTimerLoop(), wireActivities(), wireClipboard(), startBuddyBridge()];
+      cleanup = [startLiveFeeds(), startPetBrain(), startTimerLoop(), wireActivities(), wireClipboard(), startBuddyBridge(), wireAlerts(), wireWellness(), startAgentSweeper(), startAlertSweeper()];
       setReady(true);
       if (!useSettings.getState().onboarded) {
         setTimeout(() => {
           useIsland.getState().expand("home", null, true);
-          react("excited", 3500, `Hi! I'm ${usePet.getState().name} 👋`);
+          react("excited", 3500, `Hi! I'm ${usePet.getState().name}`);
           useSettings.getState().set({ onboarded: true });
           toast("Tip: Ctrl+Alt+Space opens the island anytime");
         }, 900);

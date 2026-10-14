@@ -149,7 +149,7 @@ function TimerView() {
             </span>
           </div>
           <div className="flex h-10 items-end gap-1">
-            {week.length === 0 && <div className="text-[11px] text-ink-4">Complete a focus session to start your streak 🔥</div>}
+            {week.length === 0 && <div className="text-[11px] text-ink-4">Complete a focus session to start your streak</div>}
             {week.map((h) => (
               <div key={h.day} className="flex flex-1 flex-col items-center gap-1" title={`${h.day}: ${Math.round(h.focusMs / 60000)} min`}>
                 <motion.div
@@ -202,7 +202,7 @@ export const timerModule: IslandModule = {
   id: "timer",
   title: "Focus",
   icon: TimerIcon,
-  size: { w: 560, h: 290 },
+  size: { w: 600, h: 300 },
   View: TimerView,
   useActivity: useTimerActivity,
   description: "Focus timer with pomodoro cycles, quick presets and a weekly focus chart.",

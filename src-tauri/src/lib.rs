@@ -1,5 +1,8 @@
+mod agents;
 mod audio;
+mod beta;
 mod buddy;
+mod calls;
 mod clipboard;
 mod drop;
 mod files;
@@ -7,9 +10,11 @@ mod fullscreen;
 mod hit;
 mod links;
 mod media;
+mod notifications;
 mod state;
 mod stats;
 mod window;
+mod winsrc;
 
 use state::AppState;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
@@ -17,7 +22,7 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}
 use tauri::{AppHandle, Emitter, WindowEvent};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
-fn shortcuts() -> [(Shortcut, &'static str); 5] {
+fn shortcuts() -> [(Shortcut, &'static str); 6] {
     let ca = Some(Modifiers::CONTROL | Modifiers::ALT);
     [
         (Shortcut::new(ca, Code::Space), "toggle"),
@@ -25,6 +30,7 @@ fn shortcuts() -> [(Shortcut, &'static str); 5] {
         (Shortcut::new(ca, Code::KeyT), "todos"),
         (Shortcut::new(ca, Code::KeyP), "media:toggle"),
         (Shortcut::new(ca, Code::KeyB), "pet:roam"),
+        (Shortcut::new(ca, Code::KeyM), "minimize"),
     ]
 }
 
@@ -78,7 +84,7 @@ pub fn run() {
                 return;
             }
             if let Some((_, target)) = shortcuts().iter().find(|(s, _)| s == sc) {
-                if *target == "media:toggle" || *target == "pet:roam" {
+                if matches!(*target, "media:toggle" | "pet:roam" | "minimize") {
                     let _ = app.emit("island://open", *target);
                 } else {
                     open_module(app, target);
@@ -90,6 +96,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _, _| open_module(app, "toggle")))
         .plugin(tauri_plugin_store::Builder::default().build())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None))
@@ -97,6 +104,7 @@ pub fn run() {
         .manage(AppState::default())
         .setup(|app| {
             let handle = app.handle().clone();
+            beta::enforce(&handle);
             window::reposition(&handle);
             if let Some(win) = window::main_window(&handle) {
                 let _ = win.set_ignore_cursor_events(true);
@@ -112,6 +120,9 @@ pub fn run() {
             media::spawn(handle.clone());
             stats::spawn(handle.clone());
             clipboard::spawn(handle.clone());
+            notifications::spawn(handle.clone());
+            calls::spawn(handle.clone());
+            agents::spawn(handle.clone());
             Ok(())
         })
         .on_window_event(|win, ev| match ev {
@@ -141,12 +152,23 @@ pub fn run() {
             files::open_path,
             files::reveal_path,
             files::open_url,
+            buddy::buddy_prepare,
             buddy::buddy_open,
+            buddy::buddy_take_launch,
             buddy::buddy_env,
-            buddy::buddy_close,
+            buddy::buddy_park,
             buddy::buddy_move,
             buddy::buddy_drag,
             buddy::buddy_pos,
+            window::set_capture_privacy,
+            window::idle_seconds,
+            notifications::notify_status,
+            notifications::set_notify_enabled,
+            agents::claude_code_connected,
+            agents::connect_claude_code,
+            winsrc::focus_source_window,
+            hit::set_buddy_look,
+            beta::beta_info,
             drop::init_drop_target,
         ])
         .run(tauri::generate_context!())

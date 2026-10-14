@@ -72,6 +72,49 @@ pub fn show_no_activate(win: &WebviewWindow) {
     let _ = win.show();
 }
 
+/// Hide a window from screen capture / sharing (Teams, Zoom, OBS) while keeping it visible.
+#[cfg(windows)]
+pub fn apply_capture_privacy(win: &WebviewWindow, hidden: bool) {
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::UI::WindowsAndMessaging::{SetWindowDisplayAffinity, WDA_EXCLUDEFROMCAPTURE, WDA_NONE};
+    if let Ok(h) = win.hwnd() {
+        unsafe {
+            let _ = SetWindowDisplayAffinity(HWND(h.0 as _), if hidden { WDA_EXCLUDEFROMCAPTURE } else { WDA_NONE });
+        }
+    }
+}
+
+#[cfg(not(windows))]
+pub fn apply_capture_privacy(_: &WebviewWindow, _: bool) {}
+
+#[tauri::command]
+pub fn set_capture_privacy(app: AppHandle, pet: bool, island: bool) {
+    let state = app.state::<AppState>();
+    state.pet_capture_hidden.store(pet, Ordering::Relaxed);
+    state.island_capture_hidden.store(island, Ordering::Relaxed);
+    if let Some(w) = main_window(&app) {
+        apply_capture_privacy(&w, island);
+    }
+    if let Some(w) = app.get_webview_window(crate::buddy::LABEL) {
+        apply_capture_privacy(&w, pet);
+    }
+}
+
+/// Seconds since the last keyboard/mouse input (for pausing reminders while away).
+#[tauri::command]
+pub fn idle_seconds() -> u32 {
+    #[cfg(windows)]
+    unsafe {
+        use windows::Win32::System::SystemInformation::GetTickCount;
+        use windows::Win32::UI::Input::KeyboardAndMouse::{GetLastInputInfo, LASTINPUTINFO};
+        let mut info = LASTINPUTINFO { cbSize: std::mem::size_of::<LASTINPUTINFO>() as u32, dwTime: 0 };
+        if GetLastInputInfo(&mut info).as_bool() {
+            return GetTickCount().wrapping_sub(info.dwTime) / 1000;
+        }
+    }
+    0
+}
+
 #[tauri::command]
 pub fn list_monitors(app: AppHandle) -> Vec<MonitorInfo> {
     let Some(win) = main_window(&app) else { return vec![] };
@@ -104,14 +147,16 @@ pub fn set_compact(app: AppHandle, value: bool) {
     }
 }
 
+/// The island animates itself away for fullscreen apps; here we only make sure the window
+/// can't catch the mouse. It's never hidden: Tauri would later re-apply a stale visibility
+/// state when click-through toggles, and showing it again could steal focus.
 #[tauri::command]
 pub fn set_visible(app: AppHandle, visible: bool) {
     if let Some(win) = main_window(&app) {
-        if visible {
-            show_no_activate(&win);
-        } else {
-            let _ = win.hide();
+        if !visible {
+            let _ = win.set_ignore_cursor_events(true);
         }
+        app.state::<AppState>().targets.lock().unwrap().entry("main".into()).or_default().rect = None;
     }
 }
 

@@ -1,34 +1,37 @@
 import { AnimatePresence, motion } from "motion/react";
-import { Cat, Dog, Hand, Home as HomeIcon, Lock, Moon, PawPrint, Pencil, Sun, Volleyball } from "lucide-react";
-import { callPetHome, letPetOut } from "../../state/buddy";
-import { useState } from "react";
+import { Bone, Cat, Cookie, Dog, Drumstick, Eye, EyeOff, Fish, Hand, Heart, Home as HomeIcon, Lock, Milk, Moon, PawPrint, Pencil, Sun, Volleyball, Zap, type LucideIcon } from "lucide-react";
+import { callPetHome, letPetOut, prepareBuddy } from "../../state/buddy";
+import { useEffect, useState } from "react";
 import { cx } from "../../lib/util";
 import { ACCESSORIES, PALETTES, feed, mood, notePetInteraction, petThePet, playWith, react, usePet, xpForLevel, type Food } from "../../state/pet";
 import { useSettings } from "../../state/settings";
 import { Pet } from "../../pet/Pet";
-import { Button, Menu, bouncy, softSpring } from "../../ui/primitives";
+import { Menu, Toggle, bouncy, softSpring } from "../../ui/primitives";
 import type { IslandModule } from "../types";
 
-const FOODS: Record<"cat" | "dog", { id: Food; emoji: string; label: string }[]> = {
+const FOODS: Record<"cat" | "dog", { id: Food; icon: LucideIcon; label: string }[]> = {
   cat: [
-    { id: "fish", emoji: "🐟", label: "Fish" },
-    { id: "milk", emoji: "🥛", label: "Milk" },
-    { id: "cookie", emoji: "🍪", label: "Treat" },
+    { id: "fish", icon: Fish, label: "Fish" },
+    { id: "milk", icon: Milk, label: "Milk" },
+    { id: "cookie", icon: Cookie, label: "Treat" },
   ],
   dog: [
-    { id: "bone", emoji: "🦴", label: "Bone" },
-    { id: "milk", emoji: "🥛", label: "Milk" },
-    { id: "cookie", emoji: "🍪", label: "Biscuit" },
+    { id: "bone", icon: Bone, label: "Bone" },
+    { id: "milk", icon: Milk, label: "Milk" },
+    { id: "cookie", icon: Cookie, label: "Biscuit" },
   ],
 };
 
-function Meter({ label, value, color, emoji }: { label: string; value: number; color: string; emoji: string }) {
+function Meter({ label, value, color, icon: Icon }: { label: string; value: number; color: string; icon: LucideIcon }) {
   const low = value < 25;
   return (
     <div>
       <div className="mb-1 flex items-center justify-between text-[11px]">
         <span className="text-ink-2">
-          {emoji} {label}
+          <span className="inline-flex items-center gap-1.5">
+            <Icon size={12} style={{ color }} />
+            {label}
+          </span>
         </span>
         <span className={cx("tabular", low ? "font-semibold text-warn" : "text-ink-3")}>{Math.round(value)}%</span>
       </div>
@@ -88,7 +91,11 @@ function Stage({ ball, onBallDone }: { ball: number; onBallDone: () => void }) {
             transition={{ duration: 2.4, ease: "easeOut" }}
             onAnimationComplete={onBallDone}
           >
-            ⚽
+            <svg width="20" height="20" viewBox="0 0 20 20">
+              <circle cx="10" cy="10" r="9" fill="#ff8fb8" />
+              <path d="M2.5 7.5 Q10 11 17.5 7.5 M3 13.5 Q10 9.5 17 13.5" stroke="#fff" strokeOpacity={0.75} strokeWidth={1.4} fill="none" />
+              <circle cx="7" cy="6" r="2" fill="#fff" opacity={0.45} />
+            </svg>
           </motion.div>
         )}
       </AnimatePresence>
@@ -96,8 +103,8 @@ function Stage({ ball, onBallDone }: { ball: number; onBallDone: () => void }) {
       <AnimatePresence mode="wait">
         {out ? (
           <motion.div key="out" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-center">
-            <motion.div animate={{ x: [-30, 30, -30] }} transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }} className="text-[22px] opacity-70">
-              🐾
+            <motion.div initial={{ scale: 0.6, rotate: -15 }} animate={{ scale: 1, rotate: 0 }} transition={bouncy} className="grid h-11 w-11 place-items-center rounded-2xl bg-white/7 text-ink-2">
+              <PawPrint size={20} />
             </motion.div>
             <div className="text-[13px] font-semibold">{name} is out exploring your desktop</div>
             <div className="max-w-[240px] text-[11px] text-ink-3">Look near your taskbar. Drag to toss, click to pet, double-click for zoomies.</div>
@@ -118,6 +125,7 @@ function Stage({ ball, onBallDone }: { ball: number; onBallDone: () => void }) {
 
 function PetView() {
   const s = usePet();
+  useEffect(prepareBuddy, []);
   const [editingName, setEditingName] = useState(false);
   const [ball, setBall] = useState(0);
   const need = xpForLevel(s.level);
@@ -129,7 +137,7 @@ function PetView() {
       <div className="min-w-0 flex-[1.15]">
         <Stage ball={ball} onBallDone={() => setBall(0)} />
       </div>
-      <div className="flex w-[230px] shrink-0 flex-col gap-2.5">
+      <div className="flex w-[240px] shrink-0 flex-col gap-2">
         <div className="flex items-center gap-2">
           {editingName ? (
             <input
@@ -150,13 +158,17 @@ function PetView() {
             </button>
           )}
           <span className="rounded-full bg-white/8 px-2 py-0.5 text-[10.5px] text-ink-2">
-            {m.emoji} {m.label}
+            <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full align-middle" style={{ background: m.color }} />
+            {m.label}
           </span>
+          <EyesToggle />
         </div>
 
         <div>
           <div className="mb-1 flex justify-between text-[10.5px] text-ink-3">
-            <span className="font-semibold text-[var(--accent-ink)]">Level {s.level}</span>
+            <span className="font-semibold text-[var(--accent-ink)]" title={`Earns XP when you finish tasks & focus sessions · petted ${s.totalPets}× · fed ${s.totalFeeds}×`}>
+              Level {s.level}
+            </span>
             <span className="tabular">
               {Math.round(s.xp)}/{need} xp · {ageDays}d old
             </span>
@@ -172,14 +184,15 @@ function PetView() {
         </div>
 
         <div className="space-y-2">
-          <Meter label="Fullness" value={s.fullness} color="#ff9f6e" emoji="🍖" />
-          <Meter label="Happiness" value={s.happiness} color="#ff6f9c" emoji="💖" />
-          <Meter label="Energy" value={s.energy} color="#3fe0b0" emoji="⚡" />
+          <Meter label="Fullness" value={s.fullness} color="#ff9f6e" icon={Drumstick} />
+          <Meter label="Happiness" value={s.happiness} color="#ff6f9c" icon={Heart} />
+          <Meter label="Energy" value={s.energy} color="#3fe0b0" icon={Zap} />
         </div>
 
-        <div className="grid grid-cols-3 gap-1.5">
-          <ActionButton
+        <div className="grid grid-cols-4 gap-1.5">
+          <ActionTile
             label="Pet"
+            color="#ff6f9c"
             icon={<Hand size={15} />}
             onClick={() => {
               notePetInteraction();
@@ -188,11 +201,12 @@ function PetView() {
           />
           <Menu
             align="left"
-            trigger={(open) => <ActionButton label="Feed" icon={<span className="text-[14px]">{s.kind === "cat" ? "🐟" : "🦴"}</span>} onClick={open} />}
-            items={FOODS[s.kind].map((f) => ({ label: `${f.emoji} ${f.label}`, onSelect: () => (notePetInteraction(), feed(f.id)) }))}
+            trigger={(open) => <ActionTile label="Feed" color="#ff9f6e" icon={s.kind === "cat" ? <Fish size={15} /> : <Bone size={15} />} onClick={open} />}
+            items={FOODS[s.kind].map((f) => ({ label: f.label, icon: <f.icon size={13} />, onSelect: () => (notePetInteraction(), feed(f.id)) }))}
           />
-          <ActionButton
+          <ActionTile
             label="Play"
+            color="#3fe0b0"
             icon={<Volleyball size={15} />}
             onClick={() => {
               notePetInteraction();
@@ -200,47 +214,88 @@ function PetView() {
               if (s.energy >= 15) setBall(Date.now());
             }}
           />
+          <ActionTile
+            label={s.pose === "sleep" ? "Wake" : "Nap"}
+            color="#9aa6ff"
+            active={s.pose === "sleep"}
+            icon={s.pose === "sleep" ? <Sun size={15} /> : <Moon size={15} />}
+            onClick={() => (s.pose === "sleep" ? react("yawn", 1500, "Good morning!") : usePet.setState({ pose: "sleep", poseUntil: Date.now() + 90000 }))}
+          />
         </div>
+
         <motion.button
-          whileHover={{ y: -2, scale: 1.02 }}
-          whileTap={{ scale: 0.95 }}
+          whileHover={{ y: -1 }}
+          whileTap={{ scale: 0.97 }}
           transition={bouncy}
           onClick={() => (s.out ? callPetHome() : void letPetOut())}
-          className="relative flex items-center justify-center gap-2 overflow-hidden rounded-xl py-2 text-[12px] font-semibold text-black"
-          style={{ background: "linear-gradient(135deg, var(--accent), #ff8fb8)" }}
+          className="group flex items-center gap-2.5 rounded-2xl bg-white/[0.045] py-2 pr-2.5 pl-2 text-left ring-1 ring-white/[0.06] transition-colors hover:bg-white/[0.08]"
         >
-          <motion.span animate={s.out ? {} : { rotate: [0, -14, 14, 0] }} transition={{ duration: 0.8, repeat: Infinity, repeatDelay: 2.5 }}>
+          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-xl bg-[var(--accent)]/20 text-[var(--accent-ink)] transition-transform group-hover:scale-110">
             {s.out ? <HomeIcon size={14} /> : <PawPrint size={14} />}
-          </motion.span>
-          {s.out ? `Call ${s.name} home` : `Let ${s.name} roam the desktop`}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[12px] font-semibold text-ink">{s.out ? `Call ${s.name} home` : `Let ${s.name} roam`}</span>
+            <span className="block truncate text-[10.5px] text-ink-3">{s.out ? "Back into the island" : "Out onto your desktop"} · Ctrl+Alt+B</span>
+          </span>
         </motion.button>
-        <Button
-          size="sm"
-          tone="ghost"
-          onClick={() => (s.pose === "sleep" ? react("yawn", 1500, "Good morning!") : usePet.setState({ pose: "sleep", poseUntil: Date.now() + 90000 }))}
-        >
-          <Moon size={12} /> {s.pose === "sleep" ? "Wake up" : "Nap time"}
-        </Button>
-        <div className="mt-auto text-[10px] leading-relaxed text-ink-4">
-          Earns XP when you finish tasks & focus sessions. Pet {s.totalPets}× · fed {s.totalFeeds}×
-        </div>
+
       </div>
     </div>
   );
 }
 
-function ActionButton({ label, icon, onClick }: { label: string; icon: React.ReactNode; onClick: () => void }) {
+function ActionTile({ label, icon, color, active, onClick }: { label: string; icon: React.ReactNode; color: string; active?: boolean; onClick: () => void }) {
   return (
     <motion.button
       whileHover={{ y: -2 }}
-      whileTap={{ scale: 0.9 }}
+      whileTap={{ scale: 0.92 }}
       transition={bouncy}
       onClick={onClick}
-      className="flex w-full flex-col items-center gap-0.5 rounded-xl bg-white/6 py-1.5 text-[10.5px] text-ink-2 hover:bg-white/11 hover:text-ink"
+      className={cx(
+        "group flex w-full flex-col items-center gap-1 rounded-2xl py-2 text-[10.5px] font-medium ring-1 transition-colors",
+        active ? "text-ink" : "bg-white/[0.045] text-ink-2 ring-white/[0.06] hover:bg-white/[0.08] hover:text-ink",
+      )}
+      style={active ? { background: `color-mix(in oklab, ${color} 16%, transparent)`, boxShadow: `inset 0 0 0 1px color-mix(in oklab, ${color} 45%, transparent)` } : undefined}
     >
-      {icon}
+      <span
+        className="grid h-7 w-7 place-items-center rounded-full transition-transform duration-200 group-hover:scale-110 group-active:scale-95"
+        style={{ background: `color-mix(in oklab, ${color} 20%, transparent)`, color }}
+      >
+        {icon}
+      </span>
       {label}
     </motion.button>
+  );
+}
+
+/** Compact header toggle: does the pet watch your cursor? */
+function EyesToggle() {
+  const { petEyesFollow, set } = useSettings();
+  return (
+    <motion.button
+      whileTap={{ scale: 0.88 }}
+      onClick={() => set({ petEyesFollow: !petEyesFollow })}
+      title={petEyesFollow ? "Eyes follow your cursor — click to turn off" : "Eyes don't follow your cursor — click to turn on"}
+      aria-pressed={petEyesFollow}
+      className={cx(
+        "ml-auto grid h-7 w-7 shrink-0 place-items-center rounded-full transition-colors",
+        petEyesFollow ? "bg-[var(--accent)]/20 text-[var(--accent-ink)]" : "bg-white/6 text-ink-4 hover:text-ink-2",
+      )}
+    >
+      {petEyesFollow ? <Eye size={14} /> : <EyeOff size={14} />}
+    </motion.button>
+  );
+}
+
+function EyesFollowRow() {
+  const { petEyesFollow, set } = useSettings();
+  return (
+    <label className="flex items-center justify-between px-1 text-[11px] text-ink-3">
+      <span className="flex items-center gap-1.5">
+        <Eye size={12} /> Eyes follow your cursor
+      </span>
+      <Toggle checked={petEyesFollow} onChange={(v) => set({ petEyesFollow: v })} label="Eyes follow cursor" />
+    </label>
   );
 }
 
@@ -305,6 +360,7 @@ export function PetCustomizer() {
         })}
       </div>
       <PetPillToggle />
+      <EyesFollowRow />
     </div>
   );
 }
@@ -322,7 +378,7 @@ export const petModule: IslandModule = {
   id: "pet",
   title: "Pet",
   icon: PawPrint,
-  size: { w: 640, h: 360 },
+  size: { w: 660, h: 372 },
   View: PetView,
   description: "Your island buddy. Pet, feed and play — it levels up as you get things done.",
 };

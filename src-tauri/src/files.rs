@@ -51,7 +51,8 @@ pub fn reveal_path(app: AppHandle, path: String) -> Result<(), String> {
 
 #[tauri::command]
 pub fn open_url(app: AppHandle, url: String) -> Result<(), String> {
-    if !(url.starts_with("http://") || url.starts_with("https://") || url.starts_with("mailto:")) {
+    let allowed = url.starts_with("http://") || url.starts_with("https://") || url.starts_with("mailto:") || url.starts_with("ms-settings:");
+    if !allowed {
         return Err("unsupported url".into());
     }
     app.opener().open_url(url, None::<&str>).map_err(|e| e.to_string())

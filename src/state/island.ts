@@ -9,11 +9,15 @@ interface IslandState {
   sticky: boolean;
   fullscreenHidden: boolean;
   dragging: boolean;
+  /** The desktop pet is being dragged over the island ("drop to bring home"). */
+  petNear: boolean;
   dragKind: "files" | "link" | "text" | "unknown";
   dragCount: number;
   active: string;
   /** Sub-route a module can read (e.g. stash filter "clips"). */
   route: string | null;
+  /** Bumped on every expand so modules can react to the same route again (e.g. refocus quick-add). */
+  routeNonce: number;
   settingsOpen: boolean;
   settingsSection: string;
   /** Open popovers etc. that must keep the island expanded. */
@@ -31,10 +35,12 @@ export const useIsland = create<IslandState>((set, get) => ({
   sticky: false,
   fullscreenHidden: false,
   dragging: false,
+  petNear: false,
   dragKind: "files",
   dragCount: 0,
   active: "home",
   route: null,
+  routeNonce: 0,
   settingsOpen: false,
   settingsSection: "general",
   holds: 0,
@@ -43,6 +49,7 @@ export const useIsland = create<IslandState>((set, get) => ({
     set({
       mode: "expanded",
       sticky,
+      routeNonce: get().routeNonce + 1,
       ...(module ? { active: module, route, settingsOpen: false } : {}),
     }),
   collapse: () => {

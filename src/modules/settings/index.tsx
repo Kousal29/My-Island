@@ -1,8 +1,9 @@
 import { disable, enable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { AnimatePresence, motion, Reorder } from "motion/react";
-import { Eye, FolderKanban, GripVertical, Info, Keyboard, LayoutGrid, Monitor, Palette, PawPrint, Pencil, Settings2, Shield, Trash2 } from "lucide-react";
+import { Bell, Eye, FolderKanban, GripVertical, Info, Keyboard, LayoutGrid, Monitor, Palette, PawPrint, Pencil, Settings2, Shield, Trash2 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
-import { api, isTauri, type MonitorInfo } from "../../lib/bridge";
+import { api, isTauri, type BetaInfo, type MonitorInfo } from "../../lib/bridge";
+import { Logo } from "../../ui/Logo";
 import { cx } from "../../lib/util";
 import { ACCENTS, useSettings, type AccentName } from "../../state/settings";
 import { useIsland } from "../../state/island";
@@ -14,6 +15,8 @@ import { toast } from "../../state/toast";
 import { Button, IconButton, Kbd, Segmented, Toggle, bouncy, spring } from "../../ui/primitives";
 import { PetCustomizer } from "../pet";
 import { MODULES } from "../registry";
+import { AgentsCard } from "../alerts";
+import { useAlerts } from "../../state/alerts";
 
 function Row({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
@@ -108,6 +111,9 @@ function Appearance() {
           ]}
         />
       </Row>
+      <Row label="Minimized" hint="Shrink to a slim bar (or use the ⌃ button on the pill). Rest the cursor on the bar to bring it back.">
+        <Toggle checked={s.minimized} onChange={(v) => s.set({ minimized: v })} />
+      </Row>
       <Row label="Accent color">
         <div className="flex gap-1.5">
           {(Object.keys(ACCENTS) as AccentName[]).map((a) => (
@@ -172,7 +178,7 @@ function Workspaces() {
   return (
     <div className="space-y-2">
       <div className="text-[11.5px] leading-relaxed text-ink-3">
-        Workspaces keep a project's docs, files, links, collections, task lists and tasks together. Clipboard history stays shared until you file a clip.
+        Folders keep a project's docs, files, links, subfolders, task lists and tasks together. Clipboard history stays shared until you file a clip.
       </div>
       <Reorder.Group axis="y" values={workspaces.map((w) => w.id)} onReorder={reorder} className="space-y-1.5">
         {workspaces.map((w) => {
@@ -189,14 +195,14 @@ function Workspaces() {
                       onSubmit={(patch) => {
                         update(w.id, patch);
                         setEditing(null);
-                        toast("Workspace updated");
+                        toast("Folder updated");
                       }}
                     />
                   </motion.div>
                 ) : confirm === w.id ? (
                   <motion.div key="confirm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-2 p-3">
                     <div className="text-[12.5px]">
-                      Delete <b>{w.emoji} {w.name}</b>? It holds {st.items} saved items and {st.openTodos} open tasks.
+                      Delete <b>{w.name}</b>? It holds {st.items} saved items and {st.openTodos} open tasks.
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       <Button size="sm" onClick={() => setConfirm(null)}>Cancel</Button>
@@ -260,9 +266,9 @@ function Workspaces() {
               submitLabel="Create"
               onCancel={() => setAdding(false)}
               onSubmit={(w) => {
-                create(w.name, w.emoji, w.color, w.description);
+                create(w.name, w.icon, w.color, w.description);
                 setAdding(false);
-                toast(`Created ${w.emoji} ${w.name}`);
+                toast(`Created ${w.name}`);
               }}
             />
           </motion.div>
@@ -275,10 +281,62 @@ function Workspaces() {
             onClick={() => setAdding(true)}
             className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-white/12 py-2.5 text-[12.5px] text-ink-3 hover:border-white/25 hover:text-ink-2"
           >
-            <FolderKanban size={14} /> New workspace
+            <FolderKanban size={14} /> New folder
           </motion.button>
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+function Notifications() {
+  const s = useSettings();
+  const access = useAlerts((a) => a.access);
+  const label = { allowed: "Allowed", pending: "Checking…", denied: "Blocked by Windows", unavailable: "Unavailable" }[access];
+  return (
+    <div className="space-y-3">
+      <div className="divide-y divide-white/6">
+        <Row label="Show app notifications" hint="Teams, Outlook, Slack, browsers… appear briefly in the island and in Alerts.">
+          <Toggle checked={s.mirrorNotifications} onChange={(v) => s.set({ mirrorNotifications: v })} />
+        </Row>
+        <Row label="Clear notification history" hint="Older notifications are removed automatically.">
+          <Segmented
+            id="alert-ret"
+            value={s.alertRetention}
+            onChange={(v) => s.set({ alertRetention: v })}
+            options={[
+              { value: "1h", label: "1h" },
+              { value: "24h", label: "1 day" },
+              { value: "7d", label: "1 week" },
+              { value: "never", label: "Never" },
+            ]}
+          />
+        </Row>
+        <Row label="Clear finished agent sessions" hint="How long a finished Claude Code / agent session stays visible.">
+          <Segmented
+            id="session-ret"
+            value={s.sessionRetention}
+            onChange={(v) => s.set({ sessionRetention: v })}
+            options={[
+              { value: "5m", label: "5m" },
+              { value: "15m", label: "15m" },
+              { value: "1h", label: "1h" },
+              { value: "never", label: "Never" },
+            ]}
+          />
+        </Row>
+        <Row label="Windows notification access" hint="Needed to read other apps' notifications. Nothing leaves this PC.">
+          <span className="flex items-center gap-2">
+            <span className={cx("text-[11.5px] font-medium", access === "allowed" ? "text-good" : "text-ink-3")}>{label}</span>
+            {access === "denied" && (
+              <Button size="sm" onClick={() => void api.openUrl("ms-settings:privacy-notifications")}>
+                Open
+              </Button>
+            )}
+          </span>
+        </Row>
+      </div>
+      <AgentsCard />
     </div>
   );
 }
@@ -288,6 +346,12 @@ function Privacy() {
   const clearClips = useStash((x) => x.clearClips);
   return (
     <div className="divide-y divide-white/6">
+      <Row label="Hide pet from screen sharing" hint="Invisible in Teams/Zoom shares and recordings — you still see it.">
+        <Toggle checked={s.hidePetFromCapture} onChange={(v) => s.set({ hidePetFromCapture: v })} />
+      </Row>
+      <Row label="Hide island from screen sharing" hint="Keep the whole island out of shares and screenshots.">
+        <Toggle checked={s.hideIslandFromCapture} onChange={(v) => s.set({ hideIslandFromCapture: v })} />
+      </Row>
       <Row label="Capture clipboard history" hint="Text you copy is saved locally. Password managers that flag secrets are skipped.">
         <Toggle checked={s.clipboardCapture} onChange={(v) => s.set({ clipboardCapture: v })} />
       </Row>
@@ -302,7 +366,7 @@ function Privacy() {
       <Row label="Link previews" hint="Fetch titles & icons for saved links. Off means no network requests at all.">
         <Toggle checked={s.linkPreviews} onChange={(v) => s.set({ linkPreviews: v })} />
       </Row>
-      <Row label="Clear clipboard history" hint="Pinned clips and clips in collections are kept.">
+      <Row label="Clear clipboard history" hint="Pinned clips and clips filed in folders are kept.">
         <Button size="sm" tone="danger" onClick={() => (clearClips(true), toast("Clipboard history cleared"))}>
           Clear
         </Button>
@@ -322,9 +386,10 @@ function Shortcuts() {
     ["Quick add task", <><Kbd>Ctrl</Kbd> <Kbd>Alt</Kbd> <Kbd>T</Kbd></>],
     ["Play / pause media", <><Kbd>Ctrl</Kbd> <Kbd>Alt</Kbd> <Kbd>P</Kbd></>],
     ["Let pet roam / call home", <><Kbd>Ctrl</Kbd> <Kbd>Alt</Kbd> <Kbd>B</Kbd></>],
+    ["Minimize / restore island", <><Kbd>Ctrl</Kbd> <Kbd>Alt</Kbd> <Kbd>M</Kbd></>],
     ["Pet leaves the island", "Drag it out with the mouse"],
     ["Switch tabs", <><Kbd>1</Kbd> – <Kbd>7</Kbd> or <Kbd>Ctrl</Kbd> <Kbd>Tab</Kbd></>],
-    ["Switch workspace", <><Kbd>Alt</Kbd> <Kbd>1</Kbd> – <Kbd>9</Kbd> · <Kbd>Alt</Kbd> <Kbd>0</Kbd> all</>],
+    ["Switch folder", <><Kbd>Alt</Kbd> <Kbd>1</Kbd> – <Kbd>9</Kbd> · <Kbd>Alt</Kbd> <Kbd>0</Kbd> all</>],
     ["New doc", <><Kbd>Ctrl</Kbd> <Kbd>N</Kbd> in Stash</>],
     ["Search stash", <><Kbd>Ctrl</Kbd> <Kbd>F</Kbd></>],
     ["Settings", <><Kbd>Ctrl</Kbd> <Kbd>,</Kbd></>],
@@ -344,15 +409,39 @@ function Shortcuts() {
 }
 
 function About() {
+  const [beta, setBeta] = useState<BetaInfo | null>(null);
+  useEffect(() => {
+    void api.betaInfo().then(setBeta);
+  }, []);
   return (
     <div className="space-y-3 text-[12px] leading-relaxed text-ink-2">
       <div className="flex items-center gap-3">
-        <div className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-[#8b7bff] to-[#3fd0c9] text-[22px]">🏝️</div>
+        <motion.div initial={{ scale: 0.7, rotate: -8 }} animate={{ scale: 1, rotate: 0 }} transition={bouncy}>
+          <Logo size={52} />
+        </motion.div>
         <div>
-          <div className="font-display text-[16px] font-semibold text-ink">My Island</div>
+          <div className="flex items-center gap-2 font-display text-[16px] font-semibold text-ink">
+            My Island
+            {beta?.beta && <span className="rounded-full bg-[var(--accent)]/20 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-[var(--accent-ink)] uppercase">Test build</span>}
+          </div>
           <div className="text-[11px] text-ink-3">Version 0.1.0 · Tauri 2 + React</div>
         </div>
       </div>
+      {beta?.beta && (
+        <div className="flex items-center gap-3 rounded-2xl bg-white/[0.045] p-3 ring-1 ring-white/[0.06]">
+          <div className="min-w-0 flex-1">
+            <div className="text-[12.5px] font-semibold text-ink">
+              {beta.daysLeft !== null && beta.daysLeft >= 0 ? `${beta.daysLeft} day${beta.daysLeft === 1 ? "" : "s"} left in this test` : "Test period"}
+            </div>
+            <div className="text-[11px] text-ink-3">Runs until {beta.expires}. Your feedback shapes the real release.</div>
+          </div>
+          {beta.feedbackUrl && (
+            <Button size="sm" tone="accent" onClick={() => void api.openUrl(beta.feedbackUrl!)}>
+              Send feedback
+            </Button>
+          )}
+        </div>
+      )}
       <p>A Dynamic Island for Windows: music, focus, tasks, a stash for everything you need nearby, and a little friend who cheers you on.</p>
       <p className="text-ink-3">Tip: right-click the tray icon to re-center the island if you change display layouts.</p>
     </div>
@@ -361,9 +450,10 @@ function About() {
 
 const SECTIONS = [
   { id: "general", label: "General", icon: Settings2, View: General },
-  { id: "workspaces", label: "Workspaces", icon: FolderKanban, View: Workspaces },
+  { id: "workspaces", label: "Folders", icon: FolderKanban, View: Workspaces },
   { id: "appearance", label: "Appearance", icon: Palette, View: Appearance },
   { id: "modules", label: "Modules", icon: LayoutGrid, View: Modules },
+  { id: "notifications", label: "Notifications", icon: Bell, View: Notifications },
   { id: "pet", label: "Pet", icon: PawPrint, View: PetCustomizer },
   { id: "privacy", label: "Privacy", icon: Eye, View: Privacy },
   { id: "shortcuts", label: "Shortcuts", icon: Keyboard, View: Shortcuts },
@@ -376,7 +466,7 @@ export function SettingsView() {
   const S = SECTIONS.find((s) => s.id === section)!;
   return (
     <div className="flex h-full gap-3">
-      <nav className="flex w-[138px] shrink-0 flex-col gap-0.5">
+      <nav className="flex w-[140px] shrink-0 flex-col gap-0.5 pt-0.5">
         {SECTIONS.map((s) => (
           <button
             key={s.id}
@@ -392,7 +482,7 @@ export function SettingsView() {
           <Monitor size={11} /> Changes save instantly
         </div>
       </nav>
-      <div className="scroll fade-y min-w-0 flex-1 pr-1">
+      <div className="scroll fade-y min-w-0 flex-1 px-1.5 pr-2">
         <AnimatePresence mode="wait">
           <motion.div key={section} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.16 }} className="py-1">
             <S.View />
@@ -403,4 +493,4 @@ export function SettingsView() {
   );
 }
 
-export const SETTINGS_SIZE = { w: 640, h: 420 };
+export const SETTINGS_SIZE = { w: 660, h: 440 };

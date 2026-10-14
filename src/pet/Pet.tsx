@@ -2,21 +2,45 @@ import { AnimatePresence, motion, useAnimationControls } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { paletteOf, petThePet, usePet, notePetInteraction } from "../state/pet";
 import { letPetOut } from "../state/buddy";
+import { useSettings } from "../state/settings";
 import { PetSvg } from "./PetSvg";
 import { cx } from "../lib/util";
 
-const PARTICLE: Record<string, { glyph: string; color: string }> = {
-  heart: { glyph: "❤", color: "#ff5d8f" },
-  zzz: { glyph: "z", color: "#b9c4ff" },
-  star: { glyph: "✦", color: "#ffd24a" },
-  note: { glyph: "♪", color: "var(--accent-ink)" },
-  crumb: { glyph: "•", color: "#d9a066" },
-};
+/** Tiny vector particles (no emoji): crisp at any DPI and tinted to match. */
+export function ParticleGlyph({ kind, size }: { kind: string; size: number }) {
+  switch (kind) {
+    case "heart":
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24">
+          <path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.5 3 4.5 6.9 4.5c2.1 0 3.6 1.1 5.1 3 1.5-1.9 3-3 5.1-3 3.9 0 6 4 4.5 7.3C19.5 16.4 12 21 12 21z" fill="#ff5d8f" />
+          <path d="M7.2 7.6c-1.3.2-2.2 1.3-2.2 2.6" stroke="#fff" strokeOpacity={0.6} strokeWidth={1.4} strokeLinecap="round" fill="none" />
+        </svg>
+      );
+    case "star":
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24">
+          <path d="M12 2.5c.6 4.6 2.9 6.9 7.5 7.5-4.6.6-6.9 2.9-7.5 7.5-.6-4.6-2.9-6.9-7.5-7.5 4.6-.6 6.9-2.9 7.5-7.5z" fill="#ffd24a" />
+        </svg>
+      );
+    case "note":
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="var(--accent-ink)">
+          <path d="M9 17.5V5.8l10-2.3v11.7" stroke="var(--accent-ink)" strokeWidth={2} fill="none" strokeLinejoin="round" />
+          <ellipse cx="6.5" cy="17.8" rx="3" ry="2.4" />
+          <ellipse cx="16.5" cy="15.4" rx="3" ry="2.4" />
+        </svg>
+      );
+    case "zzz":
+      return <span style={{ fontSize: size, color: "#b9c4ff", fontWeight: 800, lineHeight: 1 }}>z</span>;
+    default:
+      return <span className="block rounded-full" style={{ width: size * 0.35, height: size * 0.35, background: "#d9a066" }} />;
+  }
+}
 
 function useLook(ref: React.RefObject<HTMLElement | null>, enabled: boolean) {
   const [look, setLook] = useState({ x: 0, y: 0 });
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled) return setLook({ x: 0, y: 0 });
     let raf = 0;
     const onMove = (e: PointerEvent) => {
       cancelAnimationFrame(raf);
@@ -61,7 +85,14 @@ export function Pet({ size, variant = "full", roam = 0, interactive = true, show
   const dragged = useRef(false);
   const { kind, pose, palette, accessory, particles, bubble } = usePet();
   const ref = useRef<HTMLDivElement>(null);
-  const look = useLook(ref, !still);
+  const eyesFollow = useSettings((x) => x.petEyesFollow);
+  // Still pets (the pill) still celebrate: one quick hop when something good happens.
+  const cheer = useAnimationControls();
+  useEffect(() => {
+    if (!still || !["happy", "proud", "excited", "love"].includes(pose)) return;
+    void cheer.start({ y: [0, -7, 0, -2.5, 0], transition: { duration: 0.6, ease: "easeOut" } });
+  }, [pose, still, cheer]);
+  const look = useLook(ref, !still && eyesFollow);
   const controls = useAnimationControls();
   const [facing, setFacing] = useState(1);
   const xRef = useRef(0);
@@ -111,13 +142,14 @@ export function Pet({ size, variant = "full", roam = 0, interactive = true, show
           petThePet();
         }}
       >
-        <PetSvg kind={kind} pose={pose} palette={paletteOf(kind, palette)} accessory={accessory} look={look} variant={variant} still={still} />
+        <motion.div animate={cheer} className="h-full w-full" style={{ originY: 1 }}>
+          <PetSvg kind={kind} pose={pose} palette={paletteOf(kind, palette)} accessory={accessory} look={look} variant={variant} still={still} />
+        </motion.div>
       </motion.div>
 
       <div className="pointer-events-none absolute inset-0 overflow-visible">
         <AnimatePresence>
           {!still && particles.map((p, i) => {
-            const spec = PARTICLE[p.kind];
             const spread = ((p.id * 53) % 100) / 100 - 0.5;
             return (
               <motion.span
@@ -135,12 +167,11 @@ export function Pet({ size, variant = "full", roam = 0, interactive = true, show
                 className="absolute left-1/2 font-bold"
                 style={{
                   top: p.kind === "crumb" ? "78%" : "18%",
-                  color: spec.color,
                   fontSize: Math.max(9, size * (p.kind === "zzz" ? 0.17 : 0.15)),
                   textShadow: "0 0 8px rgba(0,0,0,0.6)",
                 }}
               >
-                {spec.glyph}
+                <ParticleGlyph kind={p.kind} size={Math.max(9, size * (p.kind === "zzz" ? 0.17 : 0.15))} />
               </motion.span>
             );
           })}

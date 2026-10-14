@@ -12,7 +12,8 @@ import { toast } from "../../state/toast";
 import { LIST_COLORS, listInWorkspace, selectVisible, todayProgress, useTodos, type Priority, type Todo, type TodoView } from "../../state/todos";
 import { ALL, useCurrentWorkspace, useWorkspaces } from "../../state/workspaces";
 import { WorkspaceDot } from "../../ui/workspaces";
-import { Chip, Empty, IconButton, Menu, Ring, Segmented, spring } from "../../ui/primitives";
+import { Chip, Empty, HScroll, IconButton, Menu, Ring, Segmented, spring } from "../../ui/primitives";
+import { InlineIcon } from "../../ui/icons";
 import type { IslandModule } from "../types";
 import { Checkbox } from "./Checkbox";
 
@@ -35,15 +36,25 @@ function QuickAdd() {
   const parsed = useMemo(() => (text.trim() ? parseQuickAdd(text) : null), [text]);
   const list = parsed?.list && lists.find((l) => l.name.toLowerCase().startsWith(parsed.list!.toLowerCase()));
 
+  const nonce = useIsland((s) => s.routeNonce);
   useEffect(() => {
-    if (route === "new") ref.current?.focus();
-  }, [route]);
+    if (route !== "new") return;
+    // The panel fades in and the window may still be gaining focus — retry briefly.
+    const tries = [0, 120, 320].map((ms) => setTimeout(() => ref.current?.focus(), ms));
+    return () => tries.forEach(clearTimeout);
+  }, [route, nonce]);
 
   const submit = () => {
     const t = quickAdd(text);
-    if (t) {
-      play("pop");
-      setText("");
+    if (!t) return;
+    play("pop");
+    setText("");
+    // If the new task doesn't belong to the list on screen, say where it went.
+    const st = useTodos.getState();
+    if (!selectVisible(st).some((x) => x.id === t.id)) {
+      const target: TodoView = t.due !== undefined ? "upcoming" : "all";
+      const when = t.due !== undefined ? describeDue(t.due, t.hasTime).label : "";
+      toast(`Added to ${target === "upcoming" ? "Upcoming" : "All"}${when ? ` · ${when}` : ""}`, { label: "View", run: () => st.setView(target) });
     }
   };
 
@@ -98,7 +109,7 @@ function QuickAdd() {
                 {PRIORITY[parsed.priority].label}
               </Tag>
             )}
-            {list && <Tag color={list.color}>{list.emoji} {list.name}</Tag>}
+            {list && <Tag color={list.color} icon={<InlineIcon name={list.icon} size={10} />}>{list.name}</Tag>}
             {parsed.tags.map((t) => (
               <Tag key={t} icon={<Hash size={10} />}>{t}</Tag>
             ))}
@@ -214,11 +225,11 @@ function TodoEditor({ todo }: { todo: Todo }) {
               update(todo.id, { workspaceId: wsId, listId: list && list.workspaceId && list.workspaceId !== wsId ? "inbox" : todo.listId });
             }}
             className="ml-auto h-6 rounded-full bg-white/6 px-2 text-[11px] text-ink-2 outline-none"
-            title="Workspace"
+            title="Folder"
           >
             {workspaces.map((w) => (
               <option key={w.id} value={w.id} className="bg-panel-2">
-                {w.emoji} {w.name}
+                {w.name}
               </option>
             ))}
           </select>
@@ -230,7 +241,7 @@ function TodoEditor({ todo }: { todo: Todo }) {
           >
             {lists.filter((l) => listInWorkspace(l, todo.workspaceId)).map((l) => (
               <option key={l.id} value={l.id} className="bg-panel-2">
-                {l.emoji} {l.name}
+                {l.name}
               </option>
             ))}
           </select>
@@ -365,17 +376,19 @@ function ViewBar() {
     { v: "today", label: <><Sun size={12} />Today</> },
     { v: "upcoming", label: <><CalendarDays size={12} />Upcoming</> },
     { v: "all", label: <><Inbox size={12} />All</> },
-    ...lists.map((l) => ({ v: `list:${l.id}` as TodoView, label: <>{l.emoji} {l.name}</> })),
+    ...lists.map((l) => ({ v: `list:${l.id}` as TodoView, label: <><InlineIcon name={l.icon} color={l.color} size={12} />{l.name}</> })),
   ];
 
   return (
-    <div className="scroll flex items-center gap-0.5 overflow-x-auto pb-0.5 [scrollbar-width:none]">
-      {views.map(({ v, label }) => (
-        <Chip key={v} active={view === v} onClick={() => setView(v)} layoutGroup="todo-view">
-          {label}
-          {counts[v] > 0 && <span className="tabular text-[10px] text-ink-3">{counts[v]}</span>}
-        </Chip>
-      ))}
+    <div className="flex min-w-0 items-center gap-0.5">
+      <HScroll className="flex-1" watch={view}>
+        {views.map(({ v, label }) => (
+          <Chip key={v} active={view === v} onClick={() => setView(v)} layoutGroup="todo-view">
+            {label}
+            {counts[v] > 0 && <span className="tabular text-[10px] text-ink-3">{counts[v]}</span>}
+          </Chip>
+        ))}
+      </HScroll>
       {adding ? (
         <input
           autoFocus
@@ -384,7 +397,7 @@ function ViewBar() {
           onBlur={() => setAdding(false)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && name.trim()) {
-              const id = addList(name.trim(), "📝", LIST_COLORS[lists.length % LIST_COLORS.length]);
+              const id = addList(name.trim(), "list", LIST_COLORS[lists.length % LIST_COLORS.length]);
               setView(`list:${id}`);
               setName("");
               setAdding(false);
@@ -395,7 +408,7 @@ function ViewBar() {
             }
           }}
           placeholder="List name"
-          className="h-7 w-24 shrink-0 rounded-full bg-white/8 px-2.5 text-[12px] outline-none"
+          className="h-7 w-28 shrink-0 rounded-full bg-white/8 px-2.5 text-[12px] outline-none"
         />
       ) : (
         <IconButton label="New list" size="sm" onClick={() => setAdding(true)}>
@@ -434,12 +447,12 @@ function TodosView() {
   const draggable = state.sort === "manual" && !query;
 
   const empty = {
-    today: { icon: "☀️", title: "Nothing due today", hint: "Add a task above — it'll be due today. Enjoy the calm!" },
-    upcoming: { icon: "🗓️", title: "No upcoming tasks", hint: "Add dates like “fri”, “next week” or “10/24”." },
-    all: { icon: curWs?.emoji ?? "✨", title: curWs ? `No tasks in ${curWs.name}` : "All clear", hint: "Your task list is empty. Add one above." },
-    done: { icon: "🏁", title: "Nothing completed yet", hint: "" },
-  } as Record<string, { icon: string; title: string; hint: string }>;
-  const e = empty[state.view] ?? { icon: "📝", title: "This list is empty", hint: "Tasks you add here land in this list." };
+    today: { icon: <Sun size={20} />, title: "Nothing due today", hint: "Add a task above — it'll be due today." },
+    upcoming: { icon: <CalendarDays size={20} />, title: "No upcoming tasks", hint: "Add dates like “fri”, “next week” or “10/24”." },
+    all: { icon: <Inbox size={20} />, title: curWs ? `No tasks in ${curWs.name}` : "All clear", hint: "Your task list is empty. Add one above." },
+    done: { icon: <Check size={20} />, title: "Nothing completed yet", hint: "" },
+  } as Record<string, { icon: React.ReactNode; title: string; hint: string }>;
+  const e = empty[state.view] ?? { icon: <ListChecks size={20} />, title: "This list is empty", hint: "Tasks you add here land in this list." };
 
   return (
     <div className="flex h-full flex-col gap-2">
@@ -478,9 +491,9 @@ function TodosView() {
             </IconButton>
           )}
           items={[
-            { label: `Sort: manual${state.sort === "manual" ? " ✓" : ""}`, icon: <GripVertical size={13} />, onSelect: () => state.setSort("manual") },
-            { label: `Sort: due date${state.sort === "due" ? " ✓" : ""}`, icon: <CalendarDays size={13} />, onSelect: () => state.setSort("due") },
-            { label: `Sort: priority${state.sort === "priority" ? " ✓" : ""}`, icon: <ArrowUpDown size={13} />, onSelect: () => state.setSort("priority") },
+            { label: "Sort: manual", icon: <GripVertical size={13} />, hint: state.sort === "manual" ? <Check size={12} /> : undefined, onSelect: () => state.setSort("manual") },
+            { label: "Sort: due date", icon: <CalendarDays size={13} />, hint: state.sort === "due" ? <Check size={12} /> : undefined, onSelect: () => state.setSort("due") },
+            { label: "Sort: priority", icon: <ArrowUpDown size={13} />, hint: state.sort === "priority" ? <Check size={12} /> : undefined, onSelect: () => state.setSort("priority") },
             "sep",
             { label: state.showDone ? "Hide completed" : "Show completed", icon: <Check size={13} />, onSelect: () => state.setShowDone(!state.showDone) },
             { label: "Completed tasks", icon: <ListChecks size={13} />, onSelect: () => state.setView("done") },
@@ -558,7 +571,7 @@ export const todosModule: IslandModule = {
   id: "todos",
   title: "To-do",
   icon: Sparkles,
-  size: { w: 600, h: 420 },
+  size: { w: 620, h: 432 },
   View: TodosView,
   useActivity: useTodoActivity,
   description: "Lists, priorities, due dates, subtasks and natural-language quick add.",

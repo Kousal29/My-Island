@@ -1,6 +1,6 @@
 use serde::Deserialize;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, AtomicI32};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU64};
 use std::sync::Mutex;
 
 /// Interactive rectangle in window-relative logical (CSS) pixels.
@@ -51,10 +51,28 @@ pub struct AppState {
     pub autohide_fullscreen: AtomicBool,
     pub clipboard_capture: AtomicBool,
     pub monitor_index: AtomicI32,
-    /// Collapsed island uses a small window so WebView2 composites far fewer pixels.
+    /// Small window while collapsed. Off by default: resizing the window at the end of a
+    /// collapse caused a visible one-frame "settle", and a static transparent window costs
+    /// nothing to keep large.
     pub compact: AtomicBool,
     pub buddy: Mutex<BuddyEnv>,
     pub buddy_dragging: AtomicBool,
+    /// The pet is out on the desktop (window shown). False while parked/pre-warmed.
+    pub buddy_active: AtomicBool,
+    /// Bumped on every launch so a pending "destroy parked window" timer knows it's stale.
+    pub buddy_gen: AtomicU64,
+    /// "hop" | "held" — read by the buddy page when it boots after a launch.
+    pub buddy_launch: Mutex<Option<String>>,
+    /// Buddy position (logical) saved while it's moved off-screen for a fullscreen app.
+    pub buddy_saved: Mutex<Option<(f64, f64)>>,
+    pub notify_enabled: AtomicBool,
+    /// "pending" | "allowed" | "denied" | "unavailable"
+    pub notify_status: Mutex<&'static str>,
+    /// Exclude windows from screen capture/sharing (still visible to the user).
+    pub pet_capture_hidden: AtomicBool,
+    pub island_capture_hidden: AtomicBool,
+    /// Desktop pet's eyes follow the cursor (cursor position is streamed to it).
+    pub buddy_look: AtomicBool,
 }
 
 impl Default for AppState {
@@ -65,9 +83,18 @@ impl Default for AppState {
             autohide_fullscreen: AtomicBool::new(true),
             clipboard_capture: AtomicBool::new(true),
             monitor_index: AtomicI32::new(-1),
-            compact: AtomicBool::new(true),
+            compact: AtomicBool::new(false),
             buddy: Mutex::new(BuddyEnv::default()),
             buddy_dragging: AtomicBool::new(false),
+            buddy_active: AtomicBool::new(false),
+            buddy_gen: AtomicU64::new(0),
+            buddy_launch: Mutex::new(None),
+            buddy_saved: Mutex::new(None),
+            notify_enabled: AtomicBool::new(true),
+            notify_status: Mutex::new("pending"),
+            pet_capture_hidden: AtomicBool::new(true),
+            island_capture_hidden: AtomicBool::new(false),
+            buddy_look: AtomicBool::new(true),
         }
     }
 }
