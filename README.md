@@ -82,7 +82,7 @@ Use the build script rather than `npm run tauri build`. It produces a single set
 Test builds:
 
 - After the date, the app shows *"This test build has ended"* and quits. Reinstalling doesn't help (the date is inside the installer), and setting the PC clock back is detected.
-- **End it early for everyone:** set `"enabled": false` in [`beta.json`](beta.json) and push it. Testers need to be online for this; the date always applies.
+- **End it early for everyone:** set `"enabled": false` in the [kill-switch Gist](https://gist.github.com/Kousal29/11296ab204396bf5d235fae625748a30). Testers need to be online for this; the date always applies.
 - Settings → About shows days left and a **Send feedback** button (opens a GitHub issue; change with `-FeedbackUrl`).
 
 The installer isn't code-signed, so Windows SmartScreen will warn. Testers click **More info → Run anyway**. Share the `.exe` via Google Drive, WeTransfer, a GitHub Release, etc. The full guide, including how to extend or shorten a period after sending, is in [docs/BUILDING-AND-SHARING.md](docs/BUILDING-AND-SHARING.md).

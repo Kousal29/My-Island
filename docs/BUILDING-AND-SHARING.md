@@ -8,6 +8,7 @@ How to build installers, the difference between test and permanent builds, how t
 - [4. Sending a build](#4-sending-a-build)
 - [5. Changing the test period](#5-changing-the-test-period)
 - [6. Ending a test early (kill switch)](#6-ending-a-test-early-kill-switch)
+- [6a. One-time setup: the kill-switch Gist](#6a-one-time-setup-the-kill-switch-gist)
 - [7. Making a test build permanent](#7-making-a-test-build-permanent)
 - [8. What testers need to know](#8-what-testers-need-to-know)
 - [9. Resetting a tester's data](#9-resetting-a-testers-data)
@@ -123,9 +124,11 @@ Details that matter here:
 
 ## 6. Ending a test early (kill switch)
 
-The kill switch is a JSON file in the repository, read by every test build over the internet:
+The kill switch is a small JSON file in a **public GitHub Gist**, read by every test build over the internet:
 
-[`beta.json`](../beta.json)
+`https://gist.github.com/Kousal29/11296ab204396bf5d235fae625748a30`
+
+Its raw URL, which the build uses, is `https://gist.githubusercontent.com/Kousal29/11296ab204396bf5d235fae625748a30/raw/beta.json`. The contents:
 
 ```json
 {
@@ -136,21 +139,79 @@ The kill switch is a JSON file in the repository, read by every test build over 
 
 To end all running test builds:
 
-1. Edit `beta.json` and set `"enabled": false`. Optionally change `message`.
-2. Commit and push to `main`.
+1. Open the Gist and click **Edit**. Change `"enabled": true` to `false`. Optionally change `message`. Click **Update public gist**.
+2. Or from a terminal: `gh gist edit 11296ab204396bf5d235fae625748a30 -f beta.json <file>`.
 
-Within about six hours (or the next time the app starts) every running test build shows the message and quits. Only builds that can reach GitHub are affected; offline testers keep going until the date.
+Within about six hours (or the next time the app starts) every running test build shows the message and quits. Offline testers keep going until the date.
 
-To *undo* it, set `"enabled": true` and push. Testers will be fine again on their next start; the app does not remember that it was ended.
+To *undo* it, set `"enabled": true` again. Testers are fine on their next start; the app doesn't remember that it was ended.
 
-**The kill switch requires the file to be reachable without a login.** The URL the build uses is:
+**Why a Gist and not the repo:** the repo can stay private. The Gist raw URL works without a login, so the kill switch keeps working either way.
 
-`https://raw.githubusercontent.com/Kousal29/My-Island/main/beta.json`
+**Keep the file plain UTF-8 without a byte-order mark.** The app's JSON parser rejects a BOM, and then the kill switch silently does nothing. Windows PowerShell's `Set-Content -Encoding utf8` adds one, so use `[System.IO.File]::WriteAllText(...)` instead, as shown above.
 
-- If the repository is **public**, this works.
-- If the repository is **private**, the URL returns a 404 to anyone without access, and the kill switch silently does nothing. Check this before you rely on it: open the URL in a private browser window. If it doesn't show the JSON, either make the repo public or put `beta.json` somewhere else public and rebuild with `-KillSwitchUrl`.
+The kill switch needs a rebuild only if the Gist URL changes. Changing `enabled` or `message` takes effect without one.
 
-The kill switch needs a rebuild only if the URL changes, not to change the message or flip `enabled`.
+## 6a. One-time setup: the kill-switch Gist
+
+Do this once, when the kill switch is first set up or the Gist is moved. It needs the GitHub CLI (`gh`) and a browser login.
+
+**1. Install the GitHub CLI**
+
+```powershell
+winget install --id GitHub.cli
+```
+
+Or download the installer from https://cli.github.com.
+
+**2. Open a new PowerShell window.** An already-open window doesn't see the new PATH. Check with `gh --version`. If that says "not recognized", the installer put it at `C:\Program Files\GitHub CLI\gh.exe`. For the current window only, run `$env:Path += ";C:\Program Files\GitHub CLI"`.
+
+**3. Log in:**
+
+```powershell
+gh auth login
+```
+
+Choose, in order:
+
+| Prompt | Choose |
+|---|---|
+| Where do you use GitHub? | `GitHub.com` |
+| Preferred protocol for Git operations? | `HTTPS` |
+| Authenticate Git with your GitHub credentials? | `Yes` |
+| How would you like to authenticate GitHub CLI? | `Login with a web browser` |
+
+Press Enter when it shows the one-time code, enter the code in the browser, and approve. Check with `gh auth status`.
+
+**4. Create the Gist.** Write the file **without a byte-order mark**, then upload it:
+
+```powershell
+$f = "$env:TEMP\beta.json"
+[System.IO.File]::WriteAllText($f, '{"enabled": true, "message": "This test of My Island has ended. Thanks so much for trying it and for your feedback!"}')
+gh gist create $f --public --desc "My Island kill switch"
+```
+
+The command prints the Gist URL, `https://gist.github.com/<user>/<id>`. The raw URL is that address with `/raw/beta.json` added, so `https://gist.githubusercontent.com/<user>/<id>/raw/beta.json`. Put that URL in the `$KillSwitchUrl` default in [`scripts/build-beta.ps1`](../scripts/build-beta.ps1).
+
+**5. Check the raw URL.** Open it in a private browser window, or run `curl -s <raw url>`. It must show the JSON on the first line. If you see a leading `﻿` before the `{`, the file has a byte-order mark. Re-upload it with the `WriteAllText` line above:
+
+```powershell
+gh gist edit <id> -f beta.json $f
+```
+
+A byte-order mark makes the app's parser reject the file, so the kill switch silently does nothing. `Set-Content -Encoding utf8` in Windows PowerShell adds one; don't use it for this file.
+
+**6. Rebuild the installers** so they use the new URL. Builds made before the change still point at the old URL.
+
+**7. Optional: make the repo private.** Once the Gist works and the rebuilt installers are out, the repo can be private. The kill switch doesn't depend on it.
+
+```powershell
+gh repo edit <owner>/My-Island --visibility private --accept-visibility-change-consequences
+```
+
+Forks and stars of a public repo can be lost when it goes private, and anyone who already cloned it keeps their copy.
+
+**Ending a test with the Gist:** edit the file on gist.github.com (**Edit** → change `"enabled"` → **Update public gist**), or run `gh gist edit <id> -f beta.json <file>`. No repo push is needed.
 
 ## 7. Making a test build permanent
 
@@ -200,8 +261,10 @@ Your own test machine can be reset the same way, but for a truly clean test use 
 | `error: unexpected argument 'nsis' found` | The build was started with `npm run tauri build -- --bundles nsis`. PowerShell drops the `--` and npm swallows the option. The script now runs `npx tauri build --bundles nsis` directly. Use the script, not `npm run`. |
 | `Build failed (exit 1)` with a Rust error | Read the lines above it in the log. Run `cargo check --manifest-path src-tauri/Cargo.toml` to see the full error without the full build. |
 | Build works but the installer is missing | The script copies the newest `.exe` from `src-tauri\target\release\bundle\nsis\`. If nothing was produced, check the log for an earlier error. |
-| The beta build didn't end when I set `enabled: false` | Check the URL in section 6 opens in a private window. Check the tester is online. Check the change was pushed to `main`, not a branch. |
+| The beta build didn't end when I set `enabled: false` | Check the Gist raw URL in section 6 opens in a private window and shows the new value. Check the tester is online. Check the file has no byte-order mark (section 6). |
 | "Your system clock seems to have moved backwards" | The clock guard fired. Correct the PC's date and time, then start the app again. |
+| `gh : The term 'gh' is not recognized` after installing | The window was opened before the install. Open a new PowerShell window, or see section 6a step 2. |
+| Kill switch doesn't end the test, Gist URL shows JSON | Likely a byte-order mark at the start of the file. Re-upload it (section 6a step 5). |
 | First `tauri dev` takes many minutes | Normal. The Rust dependencies compile once. Later runs are much quicker. |
 
 ## 11. Pre-send checklist
@@ -211,6 +274,5 @@ Your own test machine can be reset the same way, but for a truly clean test use 
 - [ ] Installed the `.exe` on a clean profile; the island appears, and Settings → About shows the right days left.
 - [ ] Quit and reopened the app; the stash, to-dos and Home layout were kept.
 - [ ] The file name shows the right end date (or `My-Island-Setup.exe` for permanent builds).
-- [ ] If it's a test build: `https://raw.githubusercontent.com/Kousal29/My-Island/main/beta.json` opens in a private window and shows `"enabled": true`.
-- [ ] `beta.json` is committed and pushed, if you changed it.
+- [ ] If it's a test build: `https://gist.githubusercontent.com/Kousal29/11296ab204396bf5d235fae625748a30/raw/beta.json` opens in a private window and shows `"enabled": true` with no leading `﻿` character.
 - [ ] The file is **not** committed to git (it's ignored; check with `git status`).

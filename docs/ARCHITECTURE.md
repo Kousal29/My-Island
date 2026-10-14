@@ -162,7 +162,7 @@ Compiled into the binary by the build script via three environment variables rea
 | Variable | Meaning |
 |---|---|
 | `MY_ISLAND_BETA_EXPIRES` | `YYYY-MM-DD`. The build stops working at the **end** of that day (UTC). Absent = permanent. |
-| `MY_ISLAND_BETA_URL` | URL of a JSON file (`beta.json` on GitHub). Absent = no remote off-switch. |
+| `MY_ISLAND_BETA_URL` | Raw URL of a JSON file (a public GitHub Gist, see BUILDING-AND-SHARING.md). Absent = no remote off-switch. |
 | `MY_ISLAND_FEEDBACK_URL` | Where Settings → About → "Send feedback" goes. |
 
 At startup, and then every six hours while the app runs:

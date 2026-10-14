@@ -17,7 +17,7 @@
 #>
 param(
   [string]$Expires = (Get-Date).AddDays(21).ToString("yyyy-MM-dd"),
-  [string]$KillSwitchUrl = "https://raw.githubusercontent.com/Kousal29/My-Island/main/beta.json",
+  [string]$KillSwitchUrl = "https://gist.githubusercontent.com/Kousal29/11296ab204396bf5d235fae625748a30/raw/beta.json",
   [string]$FeedbackUrl = "https://github.com/Kousal29/My-Island/issues/new?title=Feedback&labels=feedback",
   [switch]$NoKillSwitch,
   [switch]$NoExpiry
